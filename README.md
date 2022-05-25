@@ -2,7 +2,7 @@
 
 Groups in fedigerse
 
-Trying to implement: https://github.com/yuforium/activitypub-docs/issues
+Trying to implement: https://github.com/yuforium/activitypub-docs
 
 I saw this and thought it was cool: https://github.com/wmurphyrd/guppe
 But I want to have also a way to search back in groups. For now I am aiming for public only groups.
