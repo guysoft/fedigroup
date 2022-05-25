@@ -1,0 +1,4 @@
+main:
+  server_url: "example.com"
+  default_group_image: /default-group.png
+  data_folder: /data

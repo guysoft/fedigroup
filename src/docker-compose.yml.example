@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  fedigroup:
+    build: .
+    container_name: fedigroup
+    tty: true
+    restart: always
+    environment:
+      - VIRTUAL_HOST=example.com
+      - LETSENCRYPT_HOST=example.com
+      - LETSENCRYPT_EMAIL=admin@example.com
+    volumes:
+      # - ./app:/code/app
+      - ./data:/data
+      - ./config.yml:/code/config.yml
+
+networks:
+  default:
+    external:
+      name: nginx-proxy
