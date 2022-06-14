@@ -3,3 +3,9 @@ uvicorn
 jinja2
 pyaml
 cryptography
+sqlalchemy
+databases
+psycopg2-binary
+asyncpg
+python-multipart
+sqlmodel

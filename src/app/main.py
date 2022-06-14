@@ -1,30 +1,45 @@
 from fastapi import FastAPI
-from fastapi import FastAPI, Request, Header, Response
+from fastapi import FastAPI, Request, Header, Response, Form, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from typing import Optional
-import yaml
+from typing import Optional, List
+from sqlalchemy.orm import Session
 from .make_ssh_key import generate_keys
+from .crud import get_group_by_name, create_group
+from .db import Group, SessionLocal, database
+from .common import get_config, DIR, as_form
+from .schemas import GroupCreateForm
+import json
 
 import os.path
-
-DIR = os.path.dirname(__file__)
-CONFIG_PATH = os.path.join(DIR, "config.yml")
-
-
-def get_config():
-    with open(CONFIG_PATH) as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
-    return
 
 config = get_config()
 SERVER_DOMAIN = config["main"]["server_url"]
 SERVER_URL = "https://" + SERVER_DOMAIN
 
+
 app = FastAPI()
+
 templates = Jinja2Templates(directory=os.path.join(DIR, "templates"))
 app.mount("/static", StaticFiles(directory=os.path.join(DIR, "static")), name="static")
+
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@app.on_event("startup")
+async def startup():
+    await database.connect()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await database.disconnect()
 
 
 def get_default_gpg():
@@ -46,6 +61,17 @@ async def root():
 async def read_item(request: Request, id: str):
     return templates.TemplateResponse("item.html", {"request": request, "id": id})
 
+@app.get("/create_group", response_class=HTMLResponse)
+async def read_item(request: Request):
+    return templates.TemplateResponse("create_group.html", {"request": request, "data": {}})
+
+
+@app.post("/create_group_submit")
+async def read_item(request: Request, form: GroupCreateForm = Depends(GroupCreateForm.as_form), db: Session = Depends(get_db)):
+    db_group = get_group_by_name(db, name=form.name)
+    if db_group:
+        return { "message": "Error: group " + form.name + " already exists", "success": False}
+    return create_group(db=db, item=form.dict())
 
 @app.get("/ostatus_subscribe?acct={id}")
 async def subscribe(request: Request, id: str):
@@ -65,8 +91,12 @@ def get_context():
 
 # Example response: curl https://hayu.sh/users/guysoft  -H "Accept: application/json"
 @app.get("/group/{id}")
-async def goup_page(request: Request, id: str):
-    context = get_context();
+async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
+    db_group = get_group_by_name(db, name=id)
+    if not db_group:
+        return {"error": "Group not found"}
+
+    context = get_context()
     id_return = SERVER_URL + "/group/" + id
     context_type = "Forum" # This is an equivelent of a "Persion"
     following = SERVER_URL + "/group/" + id + "/following"
@@ -74,18 +104,24 @@ async def goup_page(request: Request, id: str):
     inbox = SERVER_URL + "/group/" + id + "/inbox"
     outbox = "AA"
     featured = SERVER_URL + "/group/" + id + "/featured"
-    preferredUsername = id
+    preferredUsername = db_group.preferredUsername
     manuallyApprovesFollowers = False
-    discoverable = False
-    name = "Group: " + id
-    summary = "AaA"
+    discoverable = db_group.discoverable
+    name = db_group.name
+    summary = db_group.summary
     url = SERVER_URL + "/group/" + id
     publicKey = {"id": SERVER_URL + "/group/" + id + "#main-key","owner": SERVER_URL + "/" + id,"publicKeyPem": get_default_gpg()}
     tag = []
     attachment = []
     endpoints = {"oauthAuthorizationEndpoint":SERVER_URL + "/oauth/authorize","oauthRegistrationEndpoint": SERVER_URL + "/api/v1/apps","oauthTokenEndpoint": SERVER_URL + "/oauth/token","sharedInbox": SERVER_URL + "/inbox","uploadMedia": SERVER_URL +"/api/ap/upload_media"}
-    icon = {"type":"Image","url": SERVER_URL + "/static/default_group_icon.png"}
-    image = {"type":"Image","url": SERVER_URL + "/static/default_group_icon.png"}
+
+    icon = {"type":"Image","url": SERVER_URL + "/static/" + db_group.icon}
+    if db_group.icon == "default":
+        icon = {"type":"Image","url": SERVER_URL + "/static/default_group_icon.png"}
+
+    image = {"type":"Image","url": SERVER_URL + "/static/" + db_group.image}
+    if db_group.image == "default":
+        image = {"type":"Image","url": SERVER_URL + "/static/default_group_icon.png"}
 
     return_value = {
         "@context": context,
@@ -110,9 +146,9 @@ async def goup_page(request: Request, id: str):
         "discoverable": discoverable,
     }
     
-    import json
     response = Response(content=json.dumps(return_value), media_type="application/activity+json")
-    return response
+    # Uncomment to debug
+    # return response
     accept = request.headers["accept"]
     print(accept)
     if "json" in accept:
@@ -124,7 +160,9 @@ async def goup_page(request: Request, id: str):
             <title>Some HTML in here</title>
         </head>
         <body>
-            <h1>Group Name """ + id + """</h1></br>
+            <h1>Group Name: """ + id + """</h1></br>
+            <h2>""" + summary + """</h1></br>
+            <img src=""" + image["url"] + """ /> </h1></br>
         </body>
     </html>
     """
@@ -134,7 +172,7 @@ async def goup_page(request: Request, id: str):
 
 # Pleroma and Mastodon return this and search it, so I copied
 @app.get("/.well-known/host-meta")
-async def goup_page(request: Request):
+async def well_known(request: Request):
     data = """<?xml version="1.0" encoding="UTF-8"?>
 <XRD xmlns="http://docs.oasis-open.org/ns/xri/xrd-1.0">
   <Link rel="lrdd" template=""" + SERVER_URL + """/.well-known/webfinger?resource={uri}"/>
@@ -145,7 +183,7 @@ async def goup_page(request: Request):
 
 # Pleroma and Mastodon return this and search it, so I copied
 @app.get("/group/{id}/featured")
-async def goup_page(request: Request, id: str):
+async def group_featured(request: Request, id: str):
     orderedItems = []
     data = {
         "@context": get_context(),
@@ -158,6 +196,11 @@ async def goup_page(request: Request, id: str):
     response = Response(content=str(data), media_type="application/xrd+xml")
     return response
 
+
+@app.get("/groups/", response_model=List[Group])
+async def read_groups():
+    query = groups.select()
+    return await database.fetch_all(query)
 
 # Example response: curl https://hayu.sh/.well-known/webfinger?resource=acct:guysoft@hayu.sh
 # Doc https://docs.joinmastodon.org/spec/webfinger/

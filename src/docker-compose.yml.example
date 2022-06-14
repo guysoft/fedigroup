@@ -10,11 +10,31 @@ services:
       - VIRTUAL_HOST=example.com
       - LETSENCRYPT_HOST=example.com
       - LETSENCRYPT_EMAIL=admin@example.com
+    links:
+      - db:db
     volumes:
       # - ./app:/code/app
       - ./data:/data
-      - ./config.yml:/code/config.yml
+      - ./config.yml:/code/app/config.yml
 
+  db:
+    image: postgres
+    container_name: fedigroup-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fedigroup
+      PGDATA: /data/postgres
+    volumes:
+       - postgres:/data/postgres
+    ports:
+      - "5432:5432"
+
+
+volumes:
+  postgres:
+  
 networks:
   default:
     external:
