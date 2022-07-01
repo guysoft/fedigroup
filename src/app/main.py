@@ -53,6 +53,7 @@ def get_default_gpg():
         return_value = f.read()
     return return_value
 
+@app.head("/")
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
@@ -106,7 +107,8 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
     featured = SERVER_URL + "/group/" + id + "/featured"
     preferredUsername = db_group.preferredUsername
     manuallyApprovesFollowers = False
-    discoverable = db_group.discoverable
+    # discoverable = db_group.discoverable
+    discoverable = False
     name = db_group.name
     summary = db_group.summary
     url = SERVER_URL + "/group/" + id
@@ -150,7 +152,7 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
     # Uncomment to debug
     # return response
     accept = request.headers["accept"]
-    print(accept)
+
     if "json" in accept:
         return return_value
 
@@ -193,7 +195,7 @@ async def group_featured(request: Request, id: str):
         "type": "OrderedCollection"
     }
 
-    response = Response(content=str(data), media_type="application/xrd+xml")
+    response = Response(content=str(data), media_type="application/jrd+json")
     return response
 
 
@@ -204,6 +206,7 @@ async def read_groups():
 
 # Example response: curl https://hayu.sh/.well-known/webfinger?resource=acct:guysoft@hayu.sh
 # Doc https://docs.joinmastodon.org/spec/webfinger/
+@app.head("/.well-known/webfinger")
 @app.get("/.well-known/webfinger")
 async def webfinger(request: Request, resource: str):
     acc_data = resource.split(":")
@@ -215,7 +218,7 @@ async def webfinger(request: Request, resource: str):
     if len(id_data) > 1:
         server = id_data[1]
     if server is not None and server == SERVER_DOMAIN:
-        aliases = [SERVER_URL + "/" + id]
+        aliases = [SERVER_URL + "/group/" + username]
         links = []
         rel_self = {"href": SERVER_URL + "/group/" + username,
                     "rel":"self",
@@ -234,7 +237,11 @@ async def webfinger(request: Request, resource: str):
             "template": SERVER_URL + "/ostatus_subscribe?acct={uri}"
         }
 
+        links.append(subscribe)
+
         subject = "acct:" + id
-        return {"aliases": aliases, "links": links, "subject": subject}
+        return_value = {"aliases": aliases, "links": links, "subject": subject}
+        response = Response(content=json.dumps(return_value), media_type="application/jrd+json; charset=utf-8")
+        return response
     return {"error": "user not found"}
 
