@@ -13,7 +13,7 @@ class GroupCreate(GroupBase):
     summary: str
     icon: str
     image: str
-    discoverable: str
+    discoverable: bool
 
 @as_form
 class GroupCreateForm(BaseModel):

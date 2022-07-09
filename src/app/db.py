@@ -25,7 +25,7 @@ class Group(SQLModel, table=True):
     summary: str = Field()
     icon: str = Field()
     image: str = Field()
-    discoverable: str = Field()
+    discoverable: bool = Field()
 
 
 # metadata = sqlalchemy.MetaData()

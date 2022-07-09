@@ -44,8 +44,9 @@ async def shutdown():
 
 def get_default_gpg():
     default_gpg_path = os.path.join(config["main"]["data_folder"], "default_gpg_key")
+    private_default_gpg_path = os.path.join(default_gpg_path, "id_rsa")
     public_default_gpg_path = os.path.join(default_gpg_path, "id_rsa.pub")
-    if not os.path.isfile(default_gpg_path):
+    if not os.path.isfile(private_default_gpg_path):
         print("No default gpg key, creating one")
         generate_keys(default_gpg_path)
     return_value = None
@@ -90,6 +91,21 @@ def get_context():
         "@language":"und"
     }]
 
+@app.head("/group/{id}/inbox")
+@app.get("/group/{id}/inbox")
+async def inbox(request: Request, id: str, db: Session = Depends(get_db)):
+    db_group = get_group_by_name(db, name=id)
+    if not db_group:
+        return {"error": "Group not found"}
+    
+    headers = request.headers
+    print("headers:")
+    print(headers)
+    print("Body:")
+    print(await request.body())
+
+
+
 # Example response: curl https://hayu.sh/users/guysoft  -H "Accept: application/json"
 @app.get("/group/{id}")
 async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
@@ -99,18 +115,19 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
 
     context = get_context()
     id_return = SERVER_URL + "/group/" + id
-    context_type = "Forum" # This is an equivelent of a "Persion"
+    context_type = "Person" # This is an equivelent of a "Persion"
     following = SERVER_URL + "/group/" + id + "/following"
     followers = SERVER_URL + "/group/" + id + "/followers"
     inbox = SERVER_URL + "/group/" + id + "/inbox"
     outbox = "AA"
     featured = SERVER_URL + "/group/" + id + "/featured"
-    preferredUsername = db_group.preferredUsername
+    # Note preferredUsername has to be the same as name
+    preferredUsername = id # db_group.preferredUsername
     manuallyApprovesFollowers = False
-    # discoverable = db_group.discoverable
-    discoverable = False
+    discoverable = db_group.discoverable
     name = db_group.name
     summary = db_group.summary
+    
     url = SERVER_URL + "/group/" + id
     publicKey = {"id": SERVER_URL + "/group/" + id + "#main-key","owner": SERVER_URL + "/" + id,"publicKeyPem": get_default_gpg()}
     tag = []
@@ -134,7 +151,7 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
         "inbox": inbox,
         "outbox": outbox,
         "featured": featured,
-        "preferredUsername": preferredUsername,
+        "preferredUsername": id,
         "name": name,
         "summary": summary,
         "url": url,
@@ -148,13 +165,15 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
         "discoverable": discoverable,
     }
     
+    # return_value = json.loads("""{"@context": ["https://www.w3.org/ns/activitystreams", "https://w3id.org/security/v1"], "id": "https://pleroma.gnethomelinux.com/group/""" + id + """", "inbox": "https://pleroma.gnethomelinux.com/inbox", "preferredUsername": \"""" + id + """", "publicKey": {"id": "https://pleroma.gnethomelinux.com/group/""" + id + """#main-key", "owner": "https://pleroma.gnethomelinux.com/group/""" + id +"""", "publicKeyPem": "BOOP"}, "type": "Person"}""")
+
     response = Response(content=json.dumps(return_value), media_type="application/activity+json")
     # Uncomment to debug
     # return response
     accept = request.headers["accept"]
-
+    print(accept)
     if "json" in accept:
-        return return_value
+        return response
 
     data = """
     <html>
@@ -171,6 +190,64 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
     response = Response(content=str(data), media_type="html")
     return response
 
+# Example response: curl https://hayu.sh/users/guysoft/following  -H "Accept: application/json"
+@app.get("/group/{id}/following")
+async def group_members(request: Request, id: str, db: Session = Depends(get_db)):
+    db_group = get_group_by_name(db, name=id)
+    if not db_group:
+        return {"error": "Group not found"}
+
+
+    headers = request.headers
+    user_agent = headers.get("user-agent")
+    algorithm = headers.get("rsa-sha256")
+    signature = headers.get("signature")
+    date_sig = headers.get("date")
+    user_to_follow = request.path_params["id"]
+    print(request.path_params)
+    
+
+    print("headers:")
+    print(headers)
+    print(signature)
+    print("Body:")
+    print(await request.body())
+
+    print("a:")
+    print(await request.form())
+    print("b:")
+    # print(await request.json())
+    print("c:")
+    # print(await )
+    data = [i async for i in request.stream()]
+    print(data)
+
+     #print("d:")
+    # print(request.values())
+
+    # import code; code.interact(local=dict(globals(), **locals()))
+
+
+
+    return_value = {"@context":["https://www.w3.org/ns/activitystreams", SERVER_URL + "/schemas/litepub-0.1.jsonld",
+    {"@language":"und"}]
+    ,"first":{"id": SERVER_URL +  "/group" + id  + "/following",
+    # ,"next":"https://hayu.sh/users/guysoft/following?page=2",
+    # "orderedItems":["https://mstdn.social/users/tilvids"
+    # ,"https://tooot.im/users/admin"
+    # ,"https://indieweb.social/users/commonspub"
+    # ,"https://tooot.im/users/talash"
+    # ,"https://tooot.im/users/LightBlueScreenOfWindowsUpdate"
+    # "https://mastodon.gamedev.place/users/godotengine"],
+    "orderedItems": ["https://hayu.sh/users/guysoft"],
+    "partOf": SERVER_URL + "/group/" + id + "/following",
+    "totalItems":4,"type":"OrderedCollectionPage"},
+    "id": SERVER_URL + "/group/" + id + "/following",
+    "totalItems":4,
+    "type":"OrderedCollection"}
+
+    response = Response(content=json.dumps(return_value), media_type="application/jrd+json")
+    return response
 
 # Pleroma and Mastodon return this and search it, so I copied
 @app.get("/.well-known/host-meta")
@@ -195,7 +272,7 @@ async def group_featured(request: Request, id: str):
         "type": "OrderedCollection"
     }
 
-    response = Response(content=str(data), media_type="application/jrd+json")
+    response = Response(content=str(data), media_type="application/activity+json")
     return response
 
 
@@ -208,12 +285,16 @@ async def read_groups():
 # Doc https://docs.joinmastodon.org/spec/webfinger/
 @app.head("/.well-known/webfinger")
 @app.get("/.well-known/webfinger")
-async def webfinger(request: Request, resource: str):
+async def webfinger(request: Request, resource: str, db: Session = Depends(get_db)):
     acc_data = resource.split(":")
     id = acc_data[1]
     id_data = acc_data[1].split("@")
-    # id_data = id.split("@")
     username = id_data[0]
+    db_group = get_group_by_name(db, name=username)
+    if not db_group:
+        return {"error": "Group not found"}
+
+    # id_data = id.split("@")
     server = None
     if len(id_data) > 1:
         server = id_data[1]
@@ -227,7 +308,7 @@ async def webfinger(request: Request, resource: str):
 
         rel_self = {
             "href": SERVER_URL + "/group/" + username,
-            "rel":"self",
+            "rel": "http://webfinger.net/rel/profile-page",
             "type":"text/html"
             }
         links.append(rel_self)
@@ -236,12 +317,30 @@ async def webfinger(request: Request, resource: str):
             "rel": "http://ostatus.org/schema/1.0/subscribe",
             "template": SERVER_URL + "/ostatus_subscribe?acct={uri}"
         }
-
-        links.append(subscribe)
+        
+        # Don't think we need this, PR if you think you do
+        # links.append(subscribe)
 
         subject = "acct:" + id
         return_value = {"aliases": aliases, "links": links, "subject": subject}
+        
+        # Override for now, this works, the top does not, not sure why
+        return_value = json.loads('{"subject": "acct:' + acc_data[1] + '", "links": [{"href": "https://pleroma.gnethomelinux.com/group/' + username + '", "rel": "self", "type": "application/activity+json"}]}')
+        
         response = Response(content=json.dumps(return_value), media_type="application/jrd+json; charset=utf-8")
         return response
     return {"error": "user not found"}
 
+
+# example call: curl https://mastodon.social/nodeinfo/2.0
+@app.get("nodeinfo/2.0")
+def mastodon_node_info():
+    return_value = {"version":"2.0","software":
+    {"name":"fedigroup","version":"1.0.0"}
+    ,"protocols":["activitypub"],
+    "services":{"outbound":[],"inbound":[]},
+    "usage":
+    {"users":{"total":1,"activeMonth":1,"activeHalfyear":1},
+    "localPosts":1},"openRegistrations":True,"metadata":[]}
+    response = Response(content=json.dumps(return_value), media_type="application/json; charset=utf-8")
+    return response
