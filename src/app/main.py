@@ -11,13 +11,14 @@ from .db import Group, SessionLocal, database
 from .common import get_config, DIR, as_form
 from .schemas import GroupCreateForm
 import json
+from .http_sig import send_signed
+from .get_federated_data import get_actor_inbox
 
 import os.path
 
 config = get_config()
 SERVER_DOMAIN = config["main"]["server_url"]
 SERVER_URL = "https://" + SERVER_DOMAIN
-
 
 app = FastAPI()
 
@@ -41,6 +42,11 @@ async def startup():
 async def shutdown():
     await database.disconnect()
 
+
+def get_default_gpg_private_key_path():
+    default_gpg_path = os.path.join(config["main"]["data_folder"], "default_gpg_key")
+    private_default_gpg_path = os.path.join(default_gpg_path, "id_rsa")
+    return private_default_gpg_path
 
 def get_default_gpg():
     default_gpg_path = os.path.join(config["main"]["data_folder"], "default_gpg_key")
@@ -91,18 +97,22 @@ def get_context():
         "@language":"und"
     }]
 
-@app.head("/group/{id}/inbox")
-@app.get("/group/{id}/inbox")
-async def inbox(request: Request, id: str, db: Session = Depends(get_db)):
-    db_group = get_group_by_name(db, name=id)
-    if not db_group:
-        return {"error": "Group not found"}
+def get_group_path(group):
+    return SERVER_URL + "/group/" + group
+
+
+# @app.head("/group/{id}/inbox")
+# @app.get("/group/{id}/inbox")
+# async def inbox(request: Request, id: str, db: Session = Depends(get_db)):
+#     db_group = get_group_by_name(db, name=id)
+#     if not db_group:
+#         return {"error": "Group not found"}
     
-    headers = request.headers
-    print("headers:")
-    print(headers)
-    print("Body:")
-    print(await request.body())
+#     headers = request.headers
+#     print("headers:")
+#     print(headers)
+#     print("Body:")
+#     print(await request.body())
 
 
 
@@ -169,7 +179,7 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
 
     response = Response(content=json.dumps(return_value), media_type="application/activity+json")
     # Uncomment to debug
-    # return response
+    return response
     accept = request.headers["accept"]
     print(accept)
     if "json" in accept:
@@ -190,44 +200,37 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
     response = Response(content=str(data), media_type="html")
     return response
 
-# Example response: curl https://hayu.sh/users/guysoft/following  -H "Accept: application/json"
-@app.get("/group/{id}/following")
-async def group_members(request: Request, id: str, db: Session = Depends(get_db)):
+# Example response: curl https://kitch.win/users/guysoft/followers  -H "Accept: application/json"
+@app.get("/group/{id}/followers")
+def group_members(request: Request, id: str, db: Session = Depends(get_db)):
     db_group = get_group_by_name(db, name=id)
     if not db_group:
         return {"error": "Group not found"}
-
-
-    headers = request.headers
-    user_agent = headers.get("user-agent")
-    algorithm = headers.get("rsa-sha256")
-    signature = headers.get("signature")
-    date_sig = headers.get("date")
-    user_to_follow = request.path_params["id"]
-    print(request.path_params)
     
+    return_value = {
+  "@context": get_context(),
+  "first": {
+    "id": SERVER_URL + "/group/" + id  +"/followers?page=1",
+    "next": SERVER_URL + "/group/" + id  +"/followers?page=2",
+    "orderedItems": [],
+    "partOf": SERVER_URL + "/group/" + id  +"/followers",
+    "totalItems": 0,
+    "type": "OrderedCollectionPage"
+  },
+  "id": SERVER_URL + "/group/" + id  +"/followers",
+  "totalItems": 0,
+  "type": "OrderedCollection"
+}
+    
+    response = Response(content=json.dumps(return_value), media_type="application/activity+json")
+    return response
 
-    print("headers:")
-    print(headers)
-    print(signature)
-    print("Body:")
-    print(await request.body())
-
-    print("a:")
-    print(await request.form())
-    print("b:")
-    # print(await request.json())
-    print("c:")
-    # print(await )
-    data = [i async for i in request.stream()]
-    print(data)
-
-     #print("d:")
-    # print(request.values())
-
-    # import code; code.interact(local=dict(globals(), **locals()))
-
-
+# Example response: curl https://hayu.sh/users/guysoft/following  -H "Accept: application/json"
+@app.get("/group/{id}/following")
+async def group_following(request: Request, id: str, db: Session = Depends(get_db)):
+    db_group = get_group_by_name(db, name=id)
+    if not db_group:
+        return {"error": "Group not found"}
 
     return_value = {"@context":["https://www.w3.org/ns/activitystreams", SERVER_URL + "/schemas/litepub-0.1.jsonld",
     {"@language":"und"}]
@@ -246,7 +249,7 @@ async def group_members(request: Request, id: str, db: Session = Depends(get_db)
     "totalItems":4,
     "type":"OrderedCollection"}
 
-    response = Response(content=json.dumps(return_value), media_type="application/jrd+json")
+    response = Response(content=json.dumps(return_value), media_type="application/activity+json")
     return response
 
 # Pleroma and Mastodon return this and search it, so I copied
@@ -325,7 +328,7 @@ async def webfinger(request: Request, resource: str, db: Session = Depends(get_d
         return_value = {"aliases": aliases, "links": links, "subject": subject}
         
         # Override for now, this works, the top does not, not sure why
-        return_value = json.loads('{"subject": "acct:' + acc_data[1] + '", "links": [{"href": "https://pleroma.gnethomelinux.com/group/' + username + '", "rel": "self", "type": "application/activity+json"}]}')
+        # return_value = json.loads('{"subject": "acct:' + acc_data[1] + '", "links": [{"href": "https://pleroma.gnethomelinux.com/group/' + username + '", "rel": "self", "type": "application/activity+json"}]}')
         
         response = Response(content=json.dumps(return_value), media_type="application/jrd+json; charset=utf-8")
         return response
@@ -344,3 +347,77 @@ def mastodon_node_info():
     "localPosts":1},"openRegistrations":True,"metadata":[]}
     response = Response(content=json.dumps(return_value), media_type="application/json; charset=utf-8")
     return response
+
+
+# @app.head("/group/{id}/inbox")
+# @app.get("/group/{id}/inbox")
+@app.post("/group/{group}/inbox")
+async def inbox(request: Request, group: str, db: Session = Depends(get_db)):
+    body = await request.body()
+
+    headers = request.headers
+    user_agent = headers.get("user-agent")
+    algorithm = headers.get("rsa-sha256")
+    signature = headers.get("signature")
+    date_sig = headers.get("date")
+    # user_to_follow = request.path_params["id"]
+    print(request.path_params)
+    print("headers:")
+    print(headers)
+    print(signature)
+    print("Body:")
+    body = json.loads(await request.body())
+    print(body)
+
+    print("a:")
+    print(await request.form())
+    print("b:")
+    # print(await request.json())
+    print("c:")
+    # print(await )
+    data = [i async for i in request.stream()]
+    print(data)
+
+    request_id = body.get("id", None)
+    request_type = body.get("type", None)
+    requesting_actor = body.get("actor", None)
+    object_str = body.get("object", None)
+    print("object_str:")
+    print(object_str)
+    # object = json.loads(object_str)
+    object = object_str
+
+    print(object)
+
+    if request_type == "Follow":
+        # Follow request from actor
+
+        # TODO VERRIFY REQUST IS LEGIT
+        print("Object")
+        print(object)
+        # requesting_actor = object.get("actor", None)
+        inbox = get_actor_inbox(requesting_actor)
+
+        accept_activity = {'@context': 'https://www.w3.org/ns/activitystreams', 
+        'id': get_group_path(group) + '#accepts/follows/',
+         'type': 'Accept',
+          'actor': get_group_path(group),
+           'object': {'id': requesting_actor + '#follows/',
+            'type': 'Follow',
+             'actor': requesting_actor,
+              'object': get_group_path(group)}
+              }
+            
+        preshared_key_id = get_group_path(group) + "#main-key"
+        response = await send_signed(inbox, accept_activity, get_default_gpg_private_key_path(), preshared_key_id)
+
+        print(response)
+        return
+    if request_type == "Accept":
+        print("Got accepted!")
+        print(object)
+        # send_signed()
+        # TODO: Add add following to db
+
+    return
+    
