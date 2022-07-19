@@ -6,13 +6,13 @@ from fastapi.staticfiles import StaticFiles
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from .make_ssh_key import generate_keys
-from .crud import get_group_by_name, create_group
-from .db import Group, SessionLocal, database
+from .crud import get_group_by_name, create_group, add_member_to_group
+from .db import Group, Members, SessionLocal, database
 from .common import get_config, DIR, as_form
-from .schemas import GroupCreateForm
+from .schemas import GroupCreateForm, MemberCreate
 import json
 from .http_sig import send_signed
-from .get_federated_data import get_actor_inbox
+from .get_federated_data import get_actor_inbox, actor_to_address_format
 
 import os.path
 
@@ -409,6 +409,16 @@ async def inbox(request: Request, group: str, db: Session = Depends(get_db)):
               }
             
         preshared_key_id = get_group_path(group) + "#main-key"
+
+        # Add to follower collection
+        member_relation = {
+            "group": group,
+            "member": actor_to_address_format(requesting_actor)
+            }
+        add_member_to_group(db=db, item=member_relation)
+
+
+        # Send back accept
         response = await send_signed(inbox, accept_activity, get_default_gpg_private_key_path(), preshared_key_id)
 
         print(response)

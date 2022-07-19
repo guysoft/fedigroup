@@ -1,4 +1,5 @@
 import requests
+from urllib.parse import urlparse
 
 def get_actor_inbox(actor_url):
     data = get_profile(actor_url)
@@ -19,3 +20,13 @@ def get_profile(actor_url):
         print("Error, failed to decode: " + str(actor_url))
 
     return data
+
+def actor_to_address_format(actor_url):
+    data = get_profile(actor_url)
+
+    parsed = urlparse(actor_url)
+    domain = parsed.netloc.split(".")[-2:]
+
+    host = ".".join(domain)    
+    
+    return data["name"] + "@" + host

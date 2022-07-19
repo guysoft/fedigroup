@@ -1,6 +1,8 @@
 from enum import unique
 import sqlalchemy
 from pydantic import BaseModel
+from datetime import datetime
+
 from sqlmodel import Field, SQLModel
 from sqlalchemy import UniqueConstraint
 from .common import get_config
@@ -20,6 +22,7 @@ class Group(SQLModel, table=True):
     __tablename__ = "groups"
     __table_args__ = (UniqueConstraint("name"),)
     id: Optional[int] = Field(default=None, primary_key=True)
+    # TODO: Remove preferredUsername
     preferredUsername: str = Field()
     name: str = Field()
     summary: str = Field()
@@ -27,6 +30,13 @@ class Group(SQLModel, table=True):
     image: str = Field()
     discoverable: bool = Field()
 
+# https://www.w3.org/TR/activitypub/#followers
+class Members(SQLModel, table=True):
+    __tablename__ = "group_members"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    group: str = Field()
+    member: str = Field()
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
 # metadata = sqlalchemy.MetaData()
 
