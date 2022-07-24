@@ -25,7 +25,7 @@ class GroupCreateForm(BaseModel):
     name: str
     summary: str
 
-class MemberCreate(MemberBase):
+class MemberCreateRemove(MemberBase):
     group: str
     member: str
     

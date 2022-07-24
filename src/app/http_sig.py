@@ -96,7 +96,7 @@ def sign_post_headers(message_body_json_str, date_str, host, path, key_path, pre
     a = digest_prefix + "=" + body_digest
     return signature_header, a
 
-async def send_signed(url, activity, key_id, preshared_key_id):
+def send_signed(url, activity, key_id, preshared_key_id):
     parsed = urlparse(url)
     domain = parsed.netloc.split(".")[-2:]
     host = ".".join(domain)    

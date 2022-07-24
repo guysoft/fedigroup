@@ -1,15 +1,15 @@
-from fastapi import FastAPI
-from fastapi import FastAPI, Request, Header, Response, Form, Depends
+from fastapi import FastAPI, Request, Header, Response, Form, Depends, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from typing import Optional, List
-from sqlalchemy.orm import Session
+# from sqlalchemy.orm import Session
+from sqlmodel import Session
 from .make_ssh_key import generate_keys
-from .crud import get_group_by_name, create_group, add_member_to_group
+from .crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, get_members_list
 from .db import Group, Members, SessionLocal, database
 from .common import get_config, DIR, as_form
-from .schemas import GroupCreateForm, MemberCreate
+from .schemas import GroupCreateForm
 import json
 from .http_sig import send_signed
 from .get_federated_data import get_actor_inbox, actor_to_address_format
@@ -206,19 +206,27 @@ def group_members(request: Request, id: str, db: Session = Depends(get_db)):
     db_group = get_group_by_name(db, name=id)
     if not db_group:
         return {"error": "Group not found"}
+
+    members = []
+    for member in get_members_list(db, id):
+        members.append(member.member)
+
     
     return_value = {
   "@context": get_context(),
   "first": {
-    "id": SERVER_URL + "/group/" + id  +"/followers?page=1",
-    "next": SERVER_URL + "/group/" + id  +"/followers?page=2",
-    "orderedItems": [],
+    # "id": SERVER_URL + "/group/" + id  +"/followers?page=1",
+    "id": SERVER_URL + "/group/" + id  +"/followers",
+    # "next": SERVER_URL + "/group/" + id  +"/followers?page=2",
+    "next": SERVER_URL + "/group/" + id  +"/followers",
+
+    "orderedItems": members,
     "partOf": SERVER_URL + "/group/" + id  +"/followers",
-    "totalItems": 0,
+    "totalItems": len(members),
     "type": "OrderedCollectionPage"
   },
   "id": SERVER_URL + "/group/" + id  +"/followers",
-  "totalItems": 0,
+  "totalItems": members,
   "type": "OrderedCollection"
 }
     
@@ -348,11 +356,16 @@ def mastodon_node_info():
     response = Response(content=json.dumps(return_value), media_type="application/json; charset=utf-8")
     return response
 
+async def send_follow_accept(inbox, accept_activity, preshared_key_id):
+    response = send_signed(inbox, accept_activity, get_default_gpg_private_key_path(), preshared_key_id)
+    print("Git accept follow request:")
+    print(response)
+
 
 # @app.head("/group/{id}/inbox")
 # @app.get("/group/{id}/inbox")
 @app.post("/group/{group}/inbox")
-async def inbox(request: Request, group: str, db: Session = Depends(get_db)):
+async def inbox(request: Request, group: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     body = await request.body()
 
     headers = request.headers
@@ -398,15 +411,18 @@ async def inbox(request: Request, group: str, db: Session = Depends(get_db)):
         # requesting_actor = object.get("actor", None)
         inbox = get_actor_inbox(requesting_actor)
 
-        accept_activity = {'@context': 'https://www.w3.org/ns/activitystreams', 
-        'id': get_group_path(group) + '#accepts/follows/',
-         'type': 'Accept',
-          'actor': get_group_path(group),
-           'object': {'id': requesting_actor + '#follows/',
-            'type': 'Follow',
-             'actor': requesting_actor,
-              'object': get_group_path(group)}
-              }
+        accept_activity = {
+            '@context': 'https://www.w3.org/ns/activitystreams', 
+            'id': get_group_path(group) + '#accepts/follows/',
+            'type': 'Accept',
+            'actor': get_group_path(group),
+            'object': {
+                'id': request_id, # requesting_actor + '#follows/',
+                'type': 'Follow',
+                'actor': requesting_actor,
+                'object': get_group_path(group)
+                }
+        }
             
         preshared_key_id = get_group_path(group) + "#main-key"
 
@@ -415,19 +431,29 @@ async def inbox(request: Request, group: str, db: Session = Depends(get_db)):
             "group": group,
             "member": actor_to_address_format(requesting_actor)
             }
-        add_member_to_group(db=db, item=member_relation)
+        result = add_member_to_group(db=db, item=member_relation)
 
+        if result is not None:
+            # Send back accept
 
-        # Send back accept
-        response = await send_signed(inbox, accept_activity, get_default_gpg_private_key_path(), preshared_key_id)
+            # response = await send_signed(inbox, accept_activity, get_default_gpg_private_key_path(), preshared_key_id)
+            # print(response)
+            background_tasks.add_task(send_follow_accept, inbox, accept_activity, preshared_key_id)
 
-        print(response)
         return
     if request_type == "Accept":
         print("Got accepted!")
         print(object)
         # send_signed()
         # TODO: Add add following to db
+    elif request_type == "Undo":
+        print("Got unfollow request")
+        # Add to follower collection
+        member_relation = {
+            "group": group,
+            "member": actor_to_address_format(requesting_actor)
+            }
+        result = remove_member_grom_group(db=db, item=member_relation)
 
     return
     
