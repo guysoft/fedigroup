@@ -13,7 +13,7 @@ from .schemas import GroupCreateForm
 import json
 from .http_sig import send_signed
 from .get_federated_data import get_actor_inbox, actor_to_address_format
-
+import time
 import os.path
 
 config = get_config()
@@ -203,6 +203,7 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
 # Example response: curl https://kitch.win/users/guysoft/followers  -H "Accept: application/json"
 @app.get("/group/{id}/followers")
 def group_members(request: Request, id: str, db: Session = Depends(get_db)):
+    return
     db_group = get_group_by_name(db, name=id)
     if not db_group:
         return {"error": "Group not found"}
@@ -409,21 +410,7 @@ async def inbox(request: Request, group: str, background_tasks: BackgroundTasks,
         print("Object")
         print(object)
         # requesting_actor = object.get("actor", None)
-        inbox = get_actor_inbox(requesting_actor)
-
-        accept_activity = {
-            '@context': 'https://www.w3.org/ns/activitystreams', 
-            'id': get_group_path(group) + '#accepts/follows/',
-            'type': 'Accept',
-            'actor': get_group_path(group),
-            'object': {
-                'id': request_id, # requesting_actor + '#follows/',
-                'type': 'Follow',
-                'actor': requesting_actor,
-                'object': get_group_path(group)
-                }
-        }
-            
+        inbox = get_actor_inbox(requesting_actor)            
         preshared_key_id = get_group_path(group) + "#main-key"
 
         # Add to follower collection
@@ -432,6 +419,19 @@ async def inbox(request: Request, group: str, background_tasks: BackgroundTasks,
             "member": actor_to_address_format(requesting_actor)
             }
         result = add_member_to_group(db=db, item=member_relation)
+
+        accept_activity = {
+            '@context': 'https://www.w3.org/ns/activitystreams', 
+            'id': get_group_path(group) + '#accepts/follows/' + str(time.time()),
+            'type': 'Accept',
+            'actor': get_group_path(group),
+            'object': {
+                'id': request_id,
+                'type': 'Follow',
+                'actor': requesting_actor,
+                'object': get_group_path(group)
+                }
+        }
 
         if result is not None:
             # Send back accept
@@ -454,6 +454,7 @@ async def inbox(request: Request, group: str, background_tasks: BackgroundTasks,
             "member": actor_to_address_format(requesting_actor)
             }
         result = remove_member_grom_group(db=db, item=member_relation)
+        # background_tasks.add_task(send_follow_accept, inbox, accept_activity, preshared_key_id)
 
     return
     
