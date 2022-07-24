@@ -203,7 +203,6 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
 # Example response: curl https://kitch.win/users/guysoft/followers  -H "Accept: application/json"
 @app.get("/group/{id}/followers")
 def group_members(request: Request, id: str, db: Session = Depends(get_db)):
-    return
     db_group = get_group_by_name(db, name=id)
     if not db_group:
         return {"error": "Group not found"}
