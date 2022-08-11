@@ -27,6 +27,6 @@ def actor_to_address_format(actor_url):
     parsed = urlparse(actor_url)
     domain = parsed.netloc.split(".")[-2:]
 
-    host = ".".join(domain)    
+    host = parsed.netloc
     
     return data["name"] + "@" + host
