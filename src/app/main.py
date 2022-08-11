@@ -11,10 +11,12 @@ from .db import Group, Members, SessionLocal, database
 from .common import get_config, DIR, as_form
 from .schemas import GroupCreateForm
 import json
-from .http_sig import send_signed
-from .get_federated_data import get_actor_inbox, actor_to_address_format
+from .http_sig import send_signed, verify_post_headers
+from .get_federated_data import get_actor_inbox, actor_to_address_format, get_profile
+from requests_http_signature import HTTPSignatureAuth, algorithms
 import time
 import os.path
+from urllib.parse import urlparse
 
 config = get_config()
 SERVER_DOMAIN = config["main"]["server_url"]
@@ -366,78 +368,102 @@ async def send_follow_accept(inbox, accept_activity, preshared_key_id):
 # @app.get("/group/{id}/inbox")
 @app.post("/group/{group}/inbox")
 async def inbox(request: Request, group: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    body = await request.body()
-
     headers = request.headers
     user_agent = headers.get("user-agent")
     algorithm = headers.get("rsa-sha256")
     signature = headers.get("signature")
     date_sig = headers.get("date")
     # user_to_follow = request.path_params["id"]
-    print(request.path_params)
-    print("headers:")
-    print(headers)
-    print(signature)
-    print("Body:")
+    
     body = json.loads(await request.body())
-    print(body)
-
-    print("a:")
-    print(await request.form())
-    print("b:")
-    # print(await request.json())
-    print("c:")
-    # print(await )
-    data = [i async for i in request.stream()]
-    print(data)
+    # print(body)
+    actor = body["actor"]    
 
     request_id = body.get("id", None)
     request_type = body.get("type", None)
     requesting_actor = body.get("actor", None)
     object_str = body.get("object", None)
-    print("object_str:")
-    print(object_str)
+
     # object = json.loads(object_str)
     object = object_str
 
-    print(object)
+
+    debug = False
+    # Debug data
+    # print(request.path_params)
+    # print("headers:")
+    # print(headers)
+    # print(signature)
+    # print("a:")
+    # print(await request.form())
+    # data = [i async for i in request.stream()]
+    # print(data)
+    # print("object_str:")
+    # print(object_str)
+    # print(object)
+    # debug = True
+
+
 
     if request_type == "Follow":
+        print("Got follow request")
         # Follow request from actor
 
         # TODO VERRIFY REQUST IS LEGIT
-        print("Object")
-        print(object)
-        # requesting_actor = object.get("actor", None)
-        inbox = get_actor_inbox(requesting_actor)            
-        preshared_key_id = get_group_path(group) + "#main-key"
+        # response = requests.get(url, auth=auth)
+        # verify_result = HTTPSignatureAuth.verify(request,
+        #                                  signature_algorithm=algorithms.HMAC_SHA256,
+        #                                  key_resolver=MyKeyResolver())
+        
+        pub_key = get_profile(actor)["publicKey"]["publicKeyPem"]
+        url = request.url._url
+        
+        
+        parsed = urlparse(url)
+        path = parsed.path
+        digest = headers["digest"]
+        body = await request.body()
+        verify_result = verify_post_headers("", pub_key,
+                                   dict(headers),
+                                   path, False,
+                                   digest,
+                                   body.decode(), debug)
 
-        # Add to follower collection
-        member_relation = {
-            "group": group,
-            "member": actor_to_address_format(requesting_actor)
-            }
-        result = add_member_to_group(db=db, item=member_relation)
+        if verify_result:
+            print("Signiture is valid")
+            # requesting_actor = object.get("actor", None)
+            inbox = get_actor_inbox(requesting_actor)            
+            preshared_key_id = get_group_path(group) + "#main-key"
 
-        accept_activity = {
-            '@context': 'https://www.w3.org/ns/activitystreams', 
-            'id': get_group_path(group) + '#accepts/follows/' + str(time.time()),
-            'type': 'Accept',
-            'actor': get_group_path(group),
-            'object': {
-                'id': request_id,
-                'type': 'Follow',
-                'actor': requesting_actor,
-                'object': get_group_path(group)
+            # Add to follower collection
+            member_relation = {
+                "group": group,
+                "member": actor_to_address_format(requesting_actor)
                 }
-        }
+            result = add_member_to_group(db=db, item=member_relation)
 
-        if result is not None:
-            # Send back accept
+            accept_activity = {
+                '@context': 'https://www.w3.org/ns/activitystreams', 
+                'id': get_group_path(group) + '#accepts/follows/' + str(time.time()),
+                'type': 'Accept',
+                'actor': get_group_path(group),
+                'object': {
+                    'id': request_id,
+                    'type': 'Follow',
+                    'actor': requesting_actor,
+                    'object': get_group_path(group)
+                    }
+            }
 
-            # response = await send_signed(inbox, accept_activity, get_default_gpg_private_key_path(), preshared_key_id)
-            # print(response)
-            background_tasks.add_task(send_follow_accept, inbox, accept_activity, preshared_key_id)
+            if result is not None:
+                # Send back accept
+
+                # response = await send_signed(inbox, accept_activity, get_default_gpg_private_key_path(), preshared_key_id)
+                # print(response)
+                background_tasks.add_task(send_follow_accept, inbox, accept_activity, preshared_key_id)
+        else:
+            print("Signature was not valid")
+            return "Signature was not valid"
 
         return
     if request_type == "Accept":
