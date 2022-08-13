@@ -13,7 +13,6 @@ from .schemas import GroupCreateForm
 import json
 from .http_sig import send_signed, verify_post_headers
 from .get_federated_data import get_actor_inbox, actor_to_address_format, get_profile
-from requests_http_signature import HTTPSignatureAuth, algorithms
 import time
 import os.path
 from urllib.parse import urlparse
@@ -94,7 +93,7 @@ async def subscribe(request: Request):
 
 def get_context():
     return ["https://www.w3.org/ns/activitystreams",
-    SERVER_URL + "/schemas/litepub-0.1.jsonld",
+    SERVER_URL + "/static/schemas/litepub-0.1.jsonld",
     {
         "@language":"und"
     }]
@@ -181,7 +180,7 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
 
     response = Response(content=json.dumps(return_value), media_type="application/activity+json")
     # Uncomment to debug
-    return response
+    # return response
     accept = request.headers["accept"]
     print(accept)
     if "json" in accept:
@@ -242,7 +241,7 @@ async def group_following(request: Request, id: str, db: Session = Depends(get_d
     if not db_group:
         return {"error": "Group not found"}
 
-    return_value = {"@context":["https://www.w3.org/ns/activitystreams", SERVER_URL + "/schemas/litepub-0.1.jsonld",
+    return_value = {"@context":["https://www.w3.org/ns/activitystreams", SERVER_URL + "/static/schemas/litepub-0.1.jsonld",
     {"@language":"und"}]
     ,"first":{"id": SERVER_URL +  "/group" + id  + "/following",
     # ,"next":"https://hayu.sh/users/guysoft/following?page=2",
