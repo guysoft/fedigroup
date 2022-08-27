@@ -210,7 +210,7 @@ def group_members(request: Request, id: str, db: Session = Depends(get_db)):
 
     members = []
     for member in get_members_list(db, id):
-        members.append(member.member)
+        members.append(member.Actor.name)
 
     
     return_value = {
@@ -227,7 +227,7 @@ def group_members(request: Request, id: str, db: Session = Depends(get_db)):
     "type": "OrderedCollectionPage"
   },
   "id": SERVER_URL + "/group/" + id  +"/followers",
-  "totalItems": members,
+  "totalItems": len(members),
   "type": "OrderedCollection"
 }
     
@@ -361,6 +361,51 @@ async def send_follow_accept(inbox, accept_activity, preshared_key_id):
     response = send_signed(inbox, accept_activity, get_default_gpg_private_key_path(), preshared_key_id)
     print("Git accept follow request:")
     print(response)
+
+
+
+# Shared inbox
+@app.post("/inbox")
+async def shared_inbox(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    body = json.loads(await request.body())
+    # print(body)
+    actor = body["actor"]
+
+    request_id = body.get("id", None)
+    request_type = body.get("type", None)
+    requst_to = body.get("to", None)
+
+    requesting_actor = body.get("actor", None)
+    object_str = body.get("object", None)
+
+    # object = json.loads(object_str)
+    object = object_str
+
+    # Debug data
+    print(request.path_params)
+    print("headers:")
+    print(request.headers)
+    
+    print("a:")
+    print(await request.form())
+    data = [i async for i in request.stream()]
+    print(data)
+    print("object_str:")
+    print(object_str)
+    print(object)
+
+    if request_type == "Note":
+        if requst_to is not None:
+            for to_user in requst_to:
+                if to_user == "https://fedigroup-dev.gnethomelinux.com/group/aaa":
+                    print("AAA was mentioed")
+                    
+                    
+        print("got a status")
+        print("Got mentioed by: ")
+
+
+    return {}
 
 
 # @app.head("/group/{id}/inbox")

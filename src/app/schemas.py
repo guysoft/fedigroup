@@ -11,6 +11,10 @@ class MemberBase(BaseModel):
     pass
 
 
+class ActorBase(BaseModel):
+    pass
+
+
 class GroupCreate(GroupBase):
     preferredUsername: str
     name: str
@@ -29,3 +33,5 @@ class MemberCreateRemove(MemberBase):
     group: str
     member: str
     
+class ActorCreateRemove(ActorBase):
+    actor: str
