@@ -1,3 +1,4 @@
+import re
 from fastapi import FastAPI, Request, Header, Response, Form, Depends, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -6,7 +7,7 @@ from typing import Optional, List
 # from sqlalchemy.orm import Session
 from sqlmodel import Session
 from .make_ssh_key import generate_keys
-from .crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, get_members_list
+from .crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, get_members_list, get_note
 from .db import Group, Members, SessionLocal, database
 from .common import get_config, DIR, as_form
 from .schemas import GroupCreateForm
@@ -87,8 +88,14 @@ async def subscribe(request: Request, id: str):
     return {"error": "Not implemented"}
 
 # Instances this instance is aware of
-@app.get("//api/v1/instance/peers")
-async def subscribe(request: Request):
+@app.get("/api/v1/instance/peers")
+async def instance_peers(request: Request):
+    return [SERVER_URL]
+
+# Instances this instance is aware of
+@app.get("/api/v1/instance")
+async def instance_peers(request: Request):
+    # TODO implement
     return [SERVER_URL]
 
 def get_context():
@@ -200,6 +207,79 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
     """
     response = Response(content=str(data), media_type="html")
     return response
+
+# Example response: curl https://hayu.sh/objects/0c4acc5b-5320-470f-8f39-74f52419746d  -H "Accept: application/activity+json"
+# Mastodon example response: curl https://tooot.im/@guysoft/104417134724456390  -H "Accept: application/activity+json"
+@app.get("/note/{id}")
+async def note(request: Request, id: str, db: Session = Depends(get_db)):
+    db_note = get_note(db, note_id=id)
+    if not db_note:
+        return {"error": "Status not found"}
+
+    context = get_context()
+    # summary = db_group.summary
+    
+    tag = []
+    to = ["https://kitch.win/users/guysoft"]
+    attachment = []
+
+    cc = []
+    actor = "https://fedigroup-dev.gnethomelinux.com/group/aaa"
+    # actor = get_profile(db_note.Actor.name )["url"]
+    note_content = "boop"
+    source = "boop"
+
+    conversation = ""
+    created_at = "2022-10-27T21:35:44.162873Z"
+    replies_count = 0
+    sensitive = False
+
+    note_id = SERVER_URL + "/note/" + str(id)
+    
+    return_value = {
+        "@context": context,
+        "actor": actor,
+        "id": note_id,
+        "type": "Note",
+        "attachment": attachment,
+        "attributedTo": actor,
+        "cc": cc,
+        "content": note_content,
+        "conversation": conversation,
+        "published": created_at,
+        "repliesCount": replies_count,
+        "sensitive": sensitive,
+        "source": source,
+        "summary":"",
+        "tag": tag,
+        "to": to,
+    }
+    
+    data = """
+    <html>
+        <head>
+            <title>Some HTML in here</title>
+        </head>
+        <body>
+            <h1>Note: """ + id + """</h1></br>
+            <h2>""" + source + """</h1></br>
+        </body>
+    </html>
+    """
+
+    return handle_activity_html_response(request, return_value, data)
+
+def handle_activity_html_response(request: Request, return_value, data: str):
+    response = Response(content=json.dumps(return_value), media_type="application/activity+json")
+    # Uncomment to debug
+    # return response
+    accept = request.headers["accept"]
+    print(accept)
+    if "json" in accept:
+        return response
+    response = Response(content=str(data), media_type="html")
+    return response
+
 
 # Example response: curl https://kitch.win/users/guysoft/followers  -H "Accept: application/json"
 @app.get("/group/{id}/followers")
@@ -524,6 +604,14 @@ async def inbox(request: Request, group: str, background_tasks: BackgroundTasks,
             }
         result = remove_member_grom_group(db=db, item=member_relation)
         # background_tasks.add_task(send_follow_accept, inbox, accept_activity, preshared_key_id)
+    elif request_type == "Announce":
+        note_boosted = body["object"]
+        print("Got a boost to status: " + str(note_boosted))
+        #TODO handle boost addition to db
+
+    else:
+        print("Got unhandled request type: " + str(body))
+
 
     return
     
