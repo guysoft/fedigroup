@@ -1,5 +1,46 @@
 import requests
 from urllib.parse import urlparse
+from app.common import get_group_path, SERVER_DOMAIN
+
+def webfinger(actor_handle):
+    # Remove proceeding @ if needed
+    if actor_handle.startswith("@"):
+        actor_handle = actor_handle[1:]
+
+    if "@" not in actor_handle:
+        return
+    
+    host = actor_handle.split("@")[1]
+
+    if host == SERVER_DOMAIN:
+        user = actor_handle.split("@")[0]
+        return {"result": "local", "actor_url": get_group_path(user)}
+
+    url = "https://" + host + "/.well-known/webfinger?resource=acct:" + actor_handle
+
+    print("Getting: " + str(url))
+
+    r = requests.get(url)
+    data = None
+    try:
+        data = r.json()
+    except requests.JSONDecodeError:
+        print("Error, failed to decode: " + str(url))
+    data["result"] = "remote"
+    return data
+
+def get_actor_url(actor_handle: str) -> str:
+    data = webfinger(actor_handle)
+    if data["result"] == "local":
+        return data["actor_url"]
+
+    links = data["links"]
+    for link in links:
+        if type(link) == dict and "rel" in link.keys() and "type" in link.keys() and "href" in link.keys():
+            if link["rel"] == "self" and link["type"] == "application/activity+json":
+                return link["href"]
+        
+    return
 
 def get_actor_inbox(actor_url):
     data = get_profile(actor_url)

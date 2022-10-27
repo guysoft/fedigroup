@@ -9,11 +9,11 @@ from sqlmodel import Session
 from .make_ssh_key import generate_keys
 from .crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, get_members_list, get_note
 from .db import Group, Members, SessionLocal, database
-from .common import get_config, DIR, as_form
+from .common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str
 from .schemas import GroupCreateForm
 import json
 from .http_sig import send_signed, verify_post_headers
-from .get_federated_data import get_actor_inbox, actor_to_address_format, get_profile
+from .get_federated_data import get_actor_inbox, actor_to_address_format, get_profile, get_actor_url
 import time
 import os.path
 from urllib.parse import urlparse
@@ -104,10 +104,6 @@ def get_context():
     {
         "@language":"und"
     }]
-
-def get_group_path(group):
-    return SERVER_URL + "/group/" + group
-
 
 # @app.head("/group/{id}/inbox")
 # @app.get("/group/{id}/inbox")
@@ -224,15 +220,14 @@ async def note(request: Request, id: str, db: Session = Depends(get_db)):
     attachment = []
 
     cc = []
-    actor = "https://fedigroup-dev.gnethomelinux.com/group/aaa"
-    # actor = get_profile(db_note.Actor.name )["url"]
-    note_content = "boop"
-    source = "boop"
+    actor = get_actor_url(db_note.actor.name)
+    note_content = db_note.content
+    source = db_note.source
 
     conversation = ""
-    created_at = "2022-10-27T21:35:44.162873Z"
+    created_at = datetime_str(db_note.created_at)
     replies_count = 0
-    sensitive = False
+    sensitive = db_note.sensitive
 
     note_id = SERVER_URL + "/note/" + str(id)
     

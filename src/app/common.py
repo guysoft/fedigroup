@@ -26,6 +26,9 @@ def get_config():
         return yaml.load(f, Loader=yaml.FullLoader)
     return
 
+config = get_config()
+SERVER_DOMAIN = config["main"]["server_url"]
+SERVER_URL = "https://" + SERVER_DOMAIN
 
 def as_form(cls: Type[BaseModel]):
     new_parameters = []
@@ -50,3 +53,9 @@ def as_form(cls: Type[BaseModel]):
     as_form_func.__signature__ = sig  # type: ignore
     setattr(cls, 'as_form', as_form_func)
     return cls
+
+def get_group_path(group):
+    return SERVER_URL + "/group/" + group
+
+def datetime_str(date_time):
+    return date_time.isoformat().replace("+00:00", "Z")
