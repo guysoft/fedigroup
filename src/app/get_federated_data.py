@@ -25,7 +25,6 @@ def actor_to_address_format(actor_url):
     data = get_profile(actor_url)
 
     parsed = urlparse(actor_url)
-    domain = parsed.netloc.split(".")[-2:]
 
     host = parsed.netloc
     
