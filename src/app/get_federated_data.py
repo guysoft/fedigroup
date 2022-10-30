@@ -1,6 +1,6 @@
 import requests
 from urllib.parse import urlparse
-from app.common import get_group_path, SERVER_DOMAIN
+from app.common import SERVER_URL, get_group_path, SERVER_DOMAIN
 
 def webfinger(actor_handle):
     # Remove proceeding @ if needed
@@ -25,12 +25,13 @@ def webfinger(actor_handle):
     try:
         data = r.json()
     except requests.JSONDecodeError:
-        print("Error, failed to decode: " + str(url))
+        print("Error, failed to decode webfinger: " + str(url))
     data["result"] = "remote"
     return data
 
 def get_actor_url(actor_handle: str) -> str:
     data = webfinger(actor_handle)
+    
     if data["result"] == "local":
         return data["actor_url"]
 
@@ -57,16 +58,27 @@ def get_profile(actor_url):
     data = None
     try:
         data = r.json()
-    except requests.JSONDecodeError:
+    except requests.JSONDecodeError as e:
+        import traceback
+        traceback.format_exc()
         print("Error, failed to decode: " + str(actor_url))
 
     return data
 
 def actor_to_address_format(actor_url):
+    parsed = urlparse(actor_url)
+    host = parsed.netloc
+
+
+    if host == SERVER_DOMAIN:
+        group_url = SERVER_URL + "/group"
+        if actor_url.startswith(group_url):
+            handle = actor_url.split(group_url + "/")[1]
+            return handle + "@" + SERVER_DOMAIN
+            
+
     data = get_profile(actor_url)
 
-    parsed = urlparse(actor_url)
 
-    host = parsed.netloc
     
     return data["name"] + "@" + host

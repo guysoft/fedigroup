@@ -1,8 +1,11 @@
+from typing import List
 from sqlalchemy.orm import Session
-from .schemas import GroupCreate, MemberCreateRemove, ActorCreateRemove, NoteCreate
-from .db import Group, Members, Actor, Note, database
+from app.schemas import GroupCreate, MemberCreateRemove, ActorCreateRemove, NoteCreate
+from app.db import Group, Members, Actor, Note, database, RecipientType, NoteRecipients
 from sqlmodel import select
 from datetime import datetime
+
+from app.get_federated_data import get_profile, actor_to_address_format
 
 # CRUD comes from: Create, Read, Update, and Delete.
 def get_group_by_name(db: Session, name: str):
@@ -23,13 +26,36 @@ def create_group(db: Session, item: GroupCreate):
 
 def create_internal_note(db: Session, item: NoteCreate):
     item["created_at"] = datetime.utcnow()
+
+
+    def create_recipients_list(recipients: List[str], recipients_type: RecipientType):
+        recipients_add = []
+        for recipient in recipients:
+            recipient_to_add = {
+                "type": recipients_type,
+                "url": recipient
+            }
+
+            if "https://www.w3.org/ns/activitystreams" not in recipient:
+                profile = get_profile(recipient)
+                if  "type" in profile.keys() and not "Collection" in profile["type"]:
+                    # This is an actor, lets store this as a mention
+                    recipient_to_add["actor_id"] = get_handle_from_url_or_create(db, recipient).id
+            
+            recipients_add.append(NoteRecipients(**recipient_to_add))
+
+        return recipients_add
+
+    cc = create_recipients_list(item["cc"], RecipientType.cc)
+    to = create_recipients_list(item["to"], RecipientType.to)
     
-    db_item = Note(**item)
-    print(db_item)
-    db.add(db_item)
+    item["recipients"] = cc + to
+    db_note_item = Note(**item)
+
+    db.add(db_note_item)
     db.commit()
-    db.refresh(db_item)
-    return db_item
+    db.refresh(db_note_item)
+    return db_note_item
 
 def add_actor(db: Session, item: ActorCreateRemove):
     db_item = Actor(**item)
@@ -49,6 +75,10 @@ def get_actor_or_create(db: Session, actor_handle: str):
             }
         actor = add_actor(db=db, item=actor_entry)
     return actor
+
+def get_handle_from_url_or_create(db, actor_url):
+    a = get_actor_or_create(db, actor_to_address_format(actor_url))
+    return a
 
 def add_member_to_group(db: Session, item: MemberCreateRemove):
     actor = get_actor_or_create(item["member"])

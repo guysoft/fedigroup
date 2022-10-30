@@ -19,6 +19,11 @@ DATABASE_URL = config["main"]["database_url"]
 DATABASE_URL = config["main"]["database_url"]
 database = databases.Database(DATABASE_URL)
 
+
+class RecipientType(str, enum.Enum):
+    to = "to"
+    cc = "cc"
+
 class Group(SQLModel, table=True):
     __tablename__ = "groups"
     __table_args__ = (UniqueConstraint("name"),)
@@ -52,6 +57,20 @@ class Announces(SQLModel, table=True):
     subject: str = Field()
     # note: str = Field()
 
+class NoteRecipients(SQLModel, table=True):
+    __tablename__ = "notes_recipients"
+    __table_args__ = {'extend_existing': True}
+    id: Optional[int] = Field(default=None, primary_key=True)
+    note_id: int = Field(default=None, foreign_key="notes.id")
+    url: str = Field()
+    type: RecipientType = Field(sa_column=Column(Enum(RecipientType)))
+
+    note: "Note" = Relationship(back_populates="recipients")
+    
+    # If the url is an actor, store it so we can look up mentions
+    actor_id: int = Field(default=None, foreign_key="actors.id", nullable=True)
+    actor: Optional["Actor"] = Relationship(back_populates="mentions")
+
 class Actor(SQLModel, table=True):
     __tablename__ = "actors"
     __table_args__ = (UniqueConstraint("name"),)
@@ -61,6 +80,9 @@ class Actor(SQLModel, table=True):
     # based of this comment: https://github.com/tiangolo/sqlmodel/issues/10#issuecomment-1020647477
     notes: List["Note"] = Relationship(back_populates="actor",
     sa_relationship_kwargs={"primaryjoin": "Note.actor_id==Actor.id"})
+    
+    mentions: List[NoteRecipients] = Relationship(back_populates="actor")
+
 
 # Notes are in-server status messages
 class Note(SQLModel, table=True):
@@ -73,7 +95,8 @@ class Note(SQLModel, table=True):
     actor: Optional[Actor] = Relationship(sa_relationship_kwargs={"primaryjoin": "Note.actor_id==Actor.id"})
     
 
-    attributed: int = Field(default=None, foreign_key="actors.id")
+    attributed_id: int = Field(default=None, foreign_key="actors.id")
+    attributed: Optional[Actor] = Relationship(sa_relationship_kwargs={"primaryjoin": "Note.attributed_id==Actor.id"})
     
     # to: List["Actor"] = Relationship(back_populates="note_to")
     # cc: List["Actor"] = Relationship(back_populates="note_cc")
@@ -85,9 +108,11 @@ class Note(SQLModel, table=True):
     # # conversation: str = Field()
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     replies_count: int = Field(default=0)
-    sensitive: bool = Field(default=False)
+    sensitive: bool = Field(default=True, nullable=False)
     # # class Config:
     # #     arbitrary_types_allowed = True
+
+    recipients: List[NoteRecipients] = Relationship(back_populates="note")
 
 
 class Tag(SQLModel, table=True):
@@ -103,18 +128,6 @@ class NoteTags(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     actor: int = Field(default=None, foreign_key="notes.id")
     actor: int = Field(default=None, foreign_key="tags.id")
-
-class RecipientType(str, enum.Enum):
-    to = "to"
-    cc = "cc"
-
-class NoteRecipients(SQLModel, table=True):
-    __tablename__ = "notes_recipients"
-    __table_args__ = {'extend_existing': True}
-    id: Optional[int] = Field(default=None, primary_key=True)
-    actor: int = Field(default=None, foreign_key="notes.id")
-    actor: int = Field(default=None, foreign_key="actors.id")
-    type: RecipientType = Field(sa_column=Column(Enum(RecipientType)))
 
 
     
