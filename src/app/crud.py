@@ -4,8 +4,10 @@ from app.schemas import GroupCreate, MemberCreateRemove, ActorCreateRemove, Note
 from app.db import Group, Members, Actor, Note, database, RecipientType, NoteRecipients
 from sqlmodel import select
 from datetime import datetime
+import uuid
+from app.common import SERVER_URL, datetime_str
 
-from app.get_federated_data import get_profile, actor_to_address_format
+from app.get_federated_data import get_profile, actor_to_address_format, get_actor_url
 
 # CRUD comes from: Create, Read, Update, and Delete.
 def get_group_by_name(db: Session, name: str):
@@ -76,12 +78,12 @@ def get_actor_or_create(db: Session, actor_handle: str):
         actor = add_actor(db=db, item=actor_entry)
     return actor
 
-def get_handle_from_url_or_create(db, actor_url):
+def get_handle_from_url_or_create(db: Session, actor_url: str):
     a = get_actor_or_create(db, actor_to_address_format(actor_url))
     return a
 
 def add_member_to_group(db: Session, item: MemberCreateRemove):
-    actor = get_actor_or_create(item["member"])
+    actor = get_actor_or_create(db, item["member"])
 
     # Get group if exists
     group = get_group_by_name(db=db, name=item["group"])
@@ -131,5 +133,37 @@ def get_members_list(db: Session, group: str):
 def get_note(db: Session, note_id: str) -> Note:
     return db.query(Note).filter(Note.id == note_id).first()
 
-def create_note(db: Session, item: NoteCreate):
-    return
+def create_activity_to_send_from_note(db_note):
+    to = []
+    cc = []
+    for recipient in db_note.recipients:
+        if recipient.type == RecipientType.to:
+            to.append(recipient.url)
+        elif recipient.type == RecipientType.cc:
+            cc.append(recipient.url)
+
+    note_url_id = SERVER_URL + "/note/" + str(db_note.id)
+    create_id = note_url_id + "/" + uuid.uuid4().hex
+
+    date_time_str = datetime_str(db_note.created_at)
+
+    activity = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Create",
+        "id": create_id,
+        "actor": get_actor_url(db_note.actor.name),
+        "object": {
+                "id": note_url_id,
+                "type": "Note",
+                "attributedTo": get_actor_url(db_note.attributed.name),
+                "content": db_note.content,
+                "source": db_note.source,
+                "published": date_time_str,
+                "to": to,
+                "cc": cc
+            },
+            "published": date_time_str,
+            "to": to,
+            "cc": cc
+         }
+    return activity
