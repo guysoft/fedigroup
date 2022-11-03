@@ -7,6 +7,7 @@ from sqlmodel import Field, Relationship, SQLModel
 from sqlalchemy import UniqueConstraint
 from .common import get_config
 from sqlalchemy.orm import sessionmaker
+from sqlmodel import Session
 from sqlalchemy import Column, Integer, Enum
 from typing import List, Optional
 from sqlalchemy.dialects.postgresql import JSON
@@ -36,13 +37,19 @@ class Group(SQLModel, table=True):
     image: str = Field()
     discoverable: bool = Field()
 
+    members: List["Members"] = Relationship(back_populates="group")
+
 # https://www.w3.org/TR/activitypub/#followers
 class Members(SQLModel, table=True):
     __tablename__ = "groups_members"
     __table_args__ = {'extend_existing': True}
     id: Optional[int] = Field(default=None, primary_key=True)
-    group: int = Field(default=None, foreign_key="groups.id")
-    member: int = Field(default=None, foreign_key="actors.id")
+    group_id: int = Field(default=None, foreign_key="groups.id")
+    group: Optional[Group] = Relationship(back_populates="members")
+    
+    member_id: int = Field(default=None, foreign_key="actors.id")
+    member: Optional["Actor"] = Relationship(back_populates="groups_in")
+
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
 # These are the notes status, each status is like a thread topic
@@ -83,6 +90,9 @@ class Actor(SQLModel, table=True):
     
     mentions: List[NoteRecipients] = Relationship(back_populates="actor")
 
+    groups_in: List[Members] = Relationship(back_populates="member")
+
+
 
 # Notes are in-server status messages
 class Note(SQLModel, table=True):
@@ -94,7 +104,6 @@ class Note(SQLModel, table=True):
     actor_id: Optional[int] = Field(default=None, foreign_key="actors.id")
     actor: Optional[Actor] = Relationship(sa_relationship_kwargs={"primaryjoin": "Note.actor_id==Actor.id"})
     
-
     attributed_id: int = Field(default=None, foreign_key="actors.id")
     attributed: Optional[Actor] = Relationship(sa_relationship_kwargs={"primaryjoin": "Note.attributed_id==Actor.id"})
     
@@ -152,4 +161,4 @@ engine = sqlalchemy.create_engine(
 SQLModel.metadata.create_all(engine)
 
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, class_=Session)

@@ -7,7 +7,7 @@ from typing import Optional, List
 # from sqlalchemy.orm import Session
 from sqlmodel import Session
 from .make_ssh_key import generate_keys
-from .crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, get_members_list, get_note
+from .crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, get_members_list, get_note, get_groups
 from .db import Group, Members, SessionLocal, database
 from .common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str
 from .schemas import GroupCreateForm
@@ -58,7 +58,7 @@ def get_default_gpg():
         print("No default gpg key, creating one")
         generate_keys(default_gpg_path)
     return_value = None
-    with open(public_default_gpg_path) as f:
+    with open(public_default_gpg_path, encoding="utf-8") as f:
         return_value = f.read()
     return return_value
 
@@ -66,20 +66,20 @@ def get_default_gpg():
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
-   
+
 @app.get("/items_j/{id}", response_class=HTMLResponse)
 async def read_item(request: Request, id: str):
     return templates.TemplateResponse("item.html", {"request": request, "id": id})
 
 @app.get("/create_group", response_class=HTMLResponse)
-async def read_item(request: Request):
+async def create_group_route(request: Request):
     return templates.TemplateResponse("create_group.html", {"request": request, "data": {}})
 
 
 @app.post("/create_group_submit")
-async def read_item(request: Request, form: GroupCreateForm = Depends(GroupCreateForm.as_form), db: Session = Depends(get_db)):
+async def create_group_submit(request: Request, form: GroupCreateForm = Depends(GroupCreateForm.as_form), db: Session = Depends(get_db)):
     db_group = get_group_by_name(db, name=form.name)
-    if db_group:
+    if db_group is not None:
         return { "message": "Error: group " + form.name + " already exists", "success": False}
     return create_group(db=db, item=form.dict())
 
@@ -94,7 +94,7 @@ async def instance_peers(request: Request):
 
 # Instances this instance is aware of
 @app.get("/api/v1/instance")
-async def instance_peers(request: Request):
+async def instance(request: Request):
     # TODO implement
     return [SERVER_URL]
 
@@ -124,7 +124,7 @@ def get_context():
 @app.get("/group/{id}")
 async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
     db_group = get_group_by_name(db, name=id)
-    if not db_group:
+    if db_group is None:
         return {"error": "Group not found"}
 
     context = get_context()
@@ -209,7 +209,7 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
 @app.get("/note/{id}")
 async def note(request: Request, id: str, db: Session = Depends(get_db)):
     db_note = get_note(db, note_id=id)
-    if not db_note:
+    if db_note is None:
         return {"error": "Status not found"}
 
     context = get_context()
@@ -280,12 +280,12 @@ def handle_activity_html_response(request: Request, return_value, data: str):
 @app.get("/group/{id}/followers")
 def group_members(request: Request, id: str, db: Session = Depends(get_db)):
     db_group = get_group_by_name(db, name=id)
-    if not db_group:
+    if db_group is None:
         return {"error": "Group not found"}
 
     members = []
     for member in get_members_list(db, id):
-        members.append(member.Actor.name)
+        members.append(member.member.name)
 
     
     return_value = {
@@ -313,7 +313,7 @@ def group_members(request: Request, id: str, db: Session = Depends(get_db)):
 @app.get("/group/{id}/following")
 async def group_following(request: Request, id: str, db: Session = Depends(get_db)):
     db_group = get_group_by_name(db, name=id)
-    if not db_group:
+    if db_group is None:
         return {"error": "Group not found"}
 
     return_value = {"@context":["https://www.w3.org/ns/activitystreams", SERVER_URL + "/static/schemas/litepub-0.1.jsonld",
@@ -364,21 +364,20 @@ async def group_featured(request: Request, id: str):
 
 
 @app.get("/groups/", response_model=List[Group])
-async def read_groups():
-    query = groups.select()
-    return await database.fetch_all(query)
+async def read_groups(db: Session = Depends(get_db)):
+    return get_groups(db)
 
 # Example response: curl https://hayu.sh/.well-known/webfinger?resource=acct:guysoft@hayu.sh
 # Doc https://docs.joinmastodon.org/spec/webfinger/
 @app.head("/.well-known/webfinger")
 @app.get("/.well-known/webfinger")
-async def webfinger(request: Request, resource: str, db: Session = Depends(get_db)):
+async def webfinger(resource: str, db: Session = Depends(get_db)):
     acc_data = resource.split(":")
     id = acc_data[1]
     id_data = acc_data[1].split("@")
     username = id_data[0]
     db_group = get_group_by_name(db, name=username)
-    if not db_group:
+    if db_group is None:
         return {"error": "Group not found"}
 
     # id_data = id.split("@")
@@ -603,6 +602,8 @@ async def inbox(request: Request, group: str, background_tasks: BackgroundTasks,
         note_boosted = body["object"]
         print("Got a boost to status: " + str(note_boosted))
         #TODO handle boost addition to db
+
+        print(json.dumps(body))
 
     else:
         print("Got unhandled request type: " + str(body))
