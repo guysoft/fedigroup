@@ -2,6 +2,7 @@ import os
 import yaml
 import inspect
 from typing import Type
+from urllib.parse import urljoin, quote_plus
 
 from fastapi import Form
 from pydantic import BaseModel
@@ -54,8 +55,17 @@ def as_form(cls: Type[BaseModel]):
     setattr(cls, 'as_form', as_form_func)
     return cls
 
-def get_group_path(group):
+def get_group_path(group) -> str:
     return SERVER_URL + "/group/" + group
 
-def datetime_str(date_time):
+def datetime_str(date_time) -> str:
     return date_time.isoformat().replace("+00:00", "Z")
+
+
+def multi_urljoin(*parts) -> str:
+    """Joins url strings together with escapes for arguments
+
+    Returns:
+        str: Joined string with strings escaped
+    """
+    return urljoin(parts[0], "/".join(quote_plus(part.strip("/"), safe="/") for part in parts[1:]))
