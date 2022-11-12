@@ -43,9 +43,14 @@ def get_actor_url(actor_handle: str) -> str:
         
     return
 
-def get_actor_inbox(actor_url):
+def get_actor_inbox(actor_url, shared=False):
     data = get_profile(actor_url)
     inbox = data.get("inbox", None)
+    if shared:
+        if "endpoints" in data.keys():
+            if "sharedInbox" in data["endpoints"]:
+                inbox = data["endpoints"].get("sharedInbox", None)
+        
     if inbox is None:
         print("Error: no inbox field in actor url")
     return inbox
