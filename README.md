@@ -1,6 +1,6 @@
 # Fedigroup
 
-Groups in fedigerse
+Groups in Fediverse
 
 Trying to implement: https://github.com/yuforium/activitypub-docs
 
