@@ -3,6 +3,8 @@
 Groups in Fediverse
 
 Trying to implement: https://github.com/yuforium/activitypub-docs
+or: https://codeberg.org/fediverse/fep/src/branch/main/feps/fep-1b12.md
+While being functional
 
 I saw this and thought it was cool: https://github.com/wmurphyrd/guppe
 But I want to have also a way to search back in groups. For now I am aiming for public only groups.
