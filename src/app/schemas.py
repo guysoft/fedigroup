@@ -19,6 +19,9 @@ class ActorBase(BaseModel):
 class NoteBase(BaseModel):
     pass
 
+class BoostBase(BaseModel):
+    pass
+
 class GroupCreate(GroupBase):
     preferredUsername: str
     name: str
@@ -56,4 +59,16 @@ class NoteCreate(NoteBase):
     # class Config:
     #     arbitrary_types_allowed = True
     
+class BoostCreate(BoostBase):
+    actor: int
+    attributed_to: int
+    to: List["Actor"] = Relationship(back_populates="name")
+    cc: List[int]
+    note_id: str # The boost item id
+    source: str
+    created_at: datetime
+    replies_count: int
+    sensitive: bool
+    tag: List[int] = []
+    attachment: list = []
 

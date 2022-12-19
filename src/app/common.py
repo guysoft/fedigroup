@@ -59,7 +59,10 @@ def get_group_path(group) -> str:
     return SERVER_URL + "/group/" + group
 
 def datetime_str(date_time) -> str:
-    return date_time.isoformat().replace("+00:00", "Z")
+    return_value = date_time.isoformat().replace("+00:00", "Z")
+    if not return_value.endswith("Z"):
+        return_value += "Z"
+    return return_value
 
 
 def multi_urljoin(*parts) -> str:

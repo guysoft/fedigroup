@@ -78,6 +78,21 @@ class NoteRecipients(SQLModel, table=True):
     actor_id: int = Field(default=None, foreign_key="actors.id", nullable=True)
     actor: Optional["Actor"] = Relationship(back_populates="mentions")
 
+
+class BoostRecipients(SQLModel, table=True):
+    __tablename__ = "boosts_recipients"
+    __table_args__ = {'extend_existing': True}
+    id: Optional[int] = Field(default=None, primary_key=True)
+    boost_id: int = Field(default=None, foreign_key="boosts.id")
+    url: str = Field()
+    type: RecipientType = Field(sa_column=Column(Enum(RecipientType)))
+
+    boost_relation: "Boost" = Relationship(back_populates="recipients")
+    
+    # If the url is an actor, store it so we can look up mentions
+    actor_id: int = Field(default=None, foreign_key="actors.id", nullable=True)
+    actor: Optional["Actor"] = Relationship(back_populates="boost_mentions")
+
 class Actor(SQLModel, table=True):
     __tablename__ = "actors"
     __table_args__ = (UniqueConstraint("name"),)
@@ -87,8 +102,12 @@ class Actor(SQLModel, table=True):
     # based of this comment: https://github.com/tiangolo/sqlmodel/issues/10#issuecomment-1020647477
     notes: List["Note"] = Relationship(back_populates="actor",
     sa_relationship_kwargs={"primaryjoin": "Note.actor_id==Actor.id"})
+
+    boosts: List["Boost"] = Relationship(back_populates="actor",
+    sa_relationship_kwargs={"primaryjoin": "Boost.actor_id==Actor.id"})
     
     mentions: List[NoteRecipients] = Relationship(back_populates="actor")
+    boost_mentions: List[BoostRecipients] = Relationship(back_populates="actor")
 
     groups_in: List[Members] = Relationship(back_populates="member")
 
@@ -122,6 +141,36 @@ class Note(SQLModel, table=True):
     # #     arbitrary_types_allowed = True
 
     recipients: List[NoteRecipients] = Relationship(back_populates="note")
+
+
+# Boosts are announce status messages from other server, we also save the content so we can search for it
+class Boost(SQLModel, table=True):
+    __tablename__ = "boosts"
+    __table_args__ = {'extend_existing': True}
+    id: Optional[int] = Field(default=None, primary_key=True)
+    attachment: list = Field(default=[], sa_column=Column(JSON))
+
+    actor_id: Optional[int] = Field(default=None, foreign_key="actors.id")
+    actor: Optional[Actor] = Relationship(sa_relationship_kwargs={"primaryjoin": "Boost.actor_id==Actor.id"})
+    
+    attributed_id: int = Field(default=None, foreign_key="actors.id")
+    attributed: Optional[Actor] = Relationship(sa_relationship_kwargs={"primaryjoin": "Boost.attributed_id==Actor.id"})
+    
+    # to: List["Actor"] = Relationship(back_populates="note_to")
+    # cc: List["Actor"] = Relationship(back_populates="note_cc")
+
+    content: str = Field()
+    note_id: str = Field() # What we are boosting
+    source: str = Field()
+    summary: str = Field()
+    # # I think this is used in OStatus stuff: https://socialhub.activitypub.rocks/t/context-vs-conversation/578/7
+    # # conversation: str = Field()
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    sensitive: bool = Field(default=True, nullable=False)
+    # # class Config:
+    # #     arbitrary_types_allowed = True
+
+    recipients: List[BoostRecipients] = Relationship(back_populates="boost_relation")
 
 
 class Tag(SQLModel, table=True):

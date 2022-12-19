@@ -3,13 +3,13 @@ from typing import Any, Dict
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from urllib.parse import urljoin
-from app.crud import create_internal_note, get_handle_from_url_or_create, create_activity_to_send_from_note, get_members_list, get_group_by_name, get_actor_or_create
+from app.crud import create_internal_note, get_handle_from_url_or_create, create_activity_to_send_from_note, create_activity_to_send_from_boost, get_members_list, get_group_by_name, get_actor_or_create, create_boost
 from app.common import SERVER_DOMAIN, SERVER_URL, multi_urljoin
 from app.send_federated_data import send_signed
 from app.get_federated_data import actor_to_address_format, get_actor_inbox, get_actor_url
 
 
-def group_message(db: Session, group: str, message: str, preshared_key_id, key_path) -> Dict[str, Any]:
+def fedigroup_message(db: Session, group: str, message: str, preshared_key_id, key_path) -> Dict[str, Any]:
     """Send a group message to all members in group"""
     now_datetime = datetime.now(timezone.utc)
 
@@ -31,12 +31,36 @@ def group_message(db: Session, group: str, message: str, preshared_key_id, key_p
     note_create = create_internal_note(db, note_data_dict)
 
     activity = create_activity_to_send_from_note(note_create)
-    send_message(db, activity, preshared_key_id, key_path)
+    send_message(db, activity, preshared_key_id, key_path, activity["object"]["cc"])
+    return
+
+def fedigroup_boost(db: Session, group: str, note_id: str, preshared_key_id, key_path) -> Dict[str, Any]:
+    """Boost a message in a group"""
+    now_datetime = datetime.now(timezone.utc)
+
+    actor = group + "@" + SERVER_DOMAIN
+    boost_data_dict = {
+        "actor": get_actor_or_create(db, actor),
+        "attributed": get_actor_or_create(db, actor),
+        "created_at": now_datetime,
+        "note_id": note_id,
+        "sensitive": False,
+        "to": [multi_urljoin(SERVER_URL, "group", group, "followers"),
+        "https://www.w3.org/ns/activitystreams#Public"
+        ],
+        "cc": []
+    }
+
+    boost_create = create_boost(db, boost_data_dict)
+
+    activity = create_activity_to_send_from_boost(boost_create)
+
+    send_message(db, activity, preshared_key_id, key_path, activity["to"])
     return
 
 
-def send_message(db, activity, preshared_key_id, key_path):
-    for recipient in activity["object"]["cc"]:
+def send_message(db, activity, preshared_key_id, key_path, recipients):
+    for recipient in recipients:
         start_pattern = urljoin(SERVER_URL, "group/")
         end_pattern = "/followers"
         if recipient.startswith(start_pattern) and recipient.endswith(end_pattern):
