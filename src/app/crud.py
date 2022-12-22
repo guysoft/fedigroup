@@ -1,4 +1,4 @@
-"""CREATE, READ, UPDATE and DELETE int he database
+"""CREATE, READ, UPDATE and DELETE in the database
 
     Returns:
         _type_: _description_
