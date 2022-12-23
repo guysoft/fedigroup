@@ -438,8 +438,7 @@ async def send_follow_accept(inbox, accept_activity, preshared_key_id):
 
 
 
-# Shared inbox
-@app.post("/inbox")
+# Shared inbox old code
 async def shared_inbox(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     body = json.loads(await request.body())
     # print(body)
@@ -484,8 +483,10 @@ async def shared_inbox(request: Request, background_tasks: BackgroundTasks, db: 
 
 # @app.head("/group/{id}/inbox")
 # @app.get("/group/{id}/inbox")
+@app.post("/inbox")
 @app.post("/group/{group}/inbox")
-async def inbox(request: Request, group: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def inbox(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db), group: str = None):
+    # called_from = request.url.path
     headers = request.headers
     user_agent = headers.get("user-agent")
     algorithm = headers.get("rsa-sha256")
@@ -521,34 +522,30 @@ async def inbox(request: Request, group: str, background_tasks: BackgroundTasks,
     # print(object)
     # debug = True
 
+    # Follow request from actor
+    pub_key = get_profile(actor)["publicKey"]["publicKeyPem"]
+    url = request.url._url
+    
+    
+    parsed = urlparse(url)
+    path = parsed.path
+    digest = headers["digest"]
+    body = await request.body()
+    verify_result = verify_post_headers("", pub_key,
+                                dict(headers),
+                                path, False,
+                                digest,
+                                body.decode(), debug)
 
+    if verify_result:
+        print("Signiture is valid")
 
-    if request_type == "Follow":
-        print("Got follow request")
-        # Follow request from actor
+        print("got type: " + str(request_type))
+            
 
-        # TODO VERRIFY REQUST IS LEGIT
-        # response = requests.get(url, auth=auth)
-        # verify_result = HTTPSignatureAuth.verify(request,
-        #                                  signature_algorithm=algorithms.HMAC_SHA256,
-        #                                  key_resolver=MyKeyResolver())
-        
-        pub_key = get_profile(actor)["publicKey"]["publicKeyPem"]
-        url = request.url._url
-        
-        
-        parsed = urlparse(url)
-        path = parsed.path
-        digest = headers["digest"]
-        body = await request.body()
-        verify_result = verify_post_headers("", pub_key,
-                                   dict(headers),
-                                   path, False,
-                                   digest,
-                                   body.decode(), debug)
+        if request_type == "Follow":
+            print("Got follow request")
 
-        if verify_result:
-            print("Signiture is valid")
             # requesting_actor = object.get("actor", None)
             inbox = get_actor_inbox(requesting_actor)            
             preshared_key_id = get_group_path(group) + "#main-key"
@@ -579,35 +576,41 @@ async def inbox(request: Request, group: str, background_tasks: BackgroundTasks,
                 # response = await send_signed(inbox, accept_activity, get_default_gpg_private_key_path(), preshared_key_id)
                 # print(response)
                 background_tasks.add_task(send_follow_accept, inbox, accept_activity, preshared_key_id)
+
+        elif request_type == "Accept":
+            print("Got accepted!")
+            print(object)
+            # send_signed()
+            # TODO: Add add following to db
+        elif request_type == "Undo":
+            print("Got unfollow request")
+            # Add to follower collection
+            member_relation = {
+                "group": group,
+                "member": actor_to_address_format(requesting_actor)
+                }
+            result = remove_member_grom_group(db=db, item=member_relation)
+            # background_tasks.add_task(send_follow_accept, inbox, accept_activity, preshared_key_id)
+        elif request_type == "Announce":
+            note_boosted = body["object"]
+            print("Got a boost to status: " + str(note_boosted))
+            #TODO handle boost addition to db
+
+            print(json.dumps(body))
+
+        elif request_type == "Mention":
+            print("got Mention type!")
+
+        elif request_type == "Create":
+            print("got request time create, unimplemented")
+
+
         else:
-            print("Signature was not valid")
-            return "Signature was not valid"
-
-        return
-    if request_type == "Accept":
-        print("Got accepted!")
-        print(object)
-        # send_signed()
-        # TODO: Add add following to db
-    elif request_type == "Undo":
-        print("Got unfollow request")
-        # Add to follower collection
-        member_relation = {
-            "group": group,
-            "member": actor_to_address_format(requesting_actor)
-            }
-        result = remove_member_grom_group(db=db, item=member_relation)
-        # background_tasks.add_task(send_follow_accept, inbox, accept_activity, preshared_key_id)
-    elif request_type == "Announce":
-        note_boosted = body["object"]
-        print("Got a boost to status: " + str(note_boosted))
-        #TODO handle boost addition to db
-
-        print(json.dumps(body))
-
+            print("Got unhandled request type: " + str(body))
+            print("request type: " + str(request_type))
     else:
-        print("Got unhandled request type: " + str(body))
-
+        print("Signature was not valid")
+        return "Signature was not valid"
 
     return
     
