@@ -2,7 +2,7 @@ import os
 import yaml
 import inspect
 from typing import Type
-from urllib.parse import urljoin, quote_plus
+from urllib.parse import urljoin, quote_plus, urlparse
 
 from fastapi import Form
 from pydantic import BaseModel
@@ -72,3 +72,29 @@ def multi_urljoin(*parts) -> str:
         str: Joined string with strings escaped
     """
     return urljoin(parts[0], "/".join(quote_plus(part.strip("/"), safe="/") for part in parts[1:]))
+
+def get_handle_name(actor_handle):
+    # Remove proceeding @ if needed
+    if actor_handle.startswith("@"):
+        actor_handle = actor_handle[1:]
+
+    if "@" not in actor_handle:
+        return None
+
+    user = actor_handle.split("@")[0]
+    return user
+
+def is_local_actor(actor_handle):
+    # Remove proceeding @ if needed
+    if actor_handle.startswith("@"):
+        actor_handle = actor_handle[1:]
+
+    if "@" not in actor_handle:
+        return False
+    
+    host = actor_handle.split("@")[1]
+
+    if host == SERVER_DOMAIN:
+        user = actor_handle.split("@")[0]
+        return True
+    return False

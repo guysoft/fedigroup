@@ -71,9 +71,11 @@ def get_profile(actor_url):
     return data
 
 def actor_to_address_format(actor_url):
+    if actor_url == "https://www.w3.org/ns/activitystreams#Public":
+        return
+    
     parsed = urlparse(actor_url)
     host = parsed.netloc
-
 
     if host == SERVER_DOMAIN:
         group_url = SERVER_URL + "/group"
@@ -84,6 +86,7 @@ def actor_to_address_format(actor_url):
 
     data = get_profile(actor_url)
 
-
+    if "name" not in data.keys():
+        return
     
     return data["name"] + "@" + host

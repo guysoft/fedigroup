@@ -7,9 +7,9 @@ from typing import Optional, List
 # from sqlalchemy.orm import Session
 from sqlmodel import Session
 from .make_ssh_key import generate_keys
-from .crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, get_members_list, get_note, get_groups
+from .crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, get_members_list, get_note, get_groups, create_federated_note
 from .db import Group, Members, SessionLocal, database
-from .common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str
+from .common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str, is_local_actor, get_handle_name
 from .schemas import GroupCreateForm
 import json
 from .http_sig import send_signed, verify_post_headers
@@ -17,6 +17,7 @@ from .get_federated_data import get_actor_inbox, actor_to_address_format, get_pr
 import time
 import os.path
 from urllib.parse import urlparse
+import starlette
 
 config = get_config()
 SERVER_DOMAIN = config["main"]["server_url"]
@@ -493,8 +494,17 @@ async def inbox(request: Request, background_tasks: BackgroundTasks, db: Session
     signature = headers.get("signature")
     date_sig = headers.get("date")
     # user_to_follow = request.path_params["id"]
+
+    body_bytes = None
+    try:
+        body_bytes = await request.body()
+    except starlette.requests.ClientDisconnect:
+        message = "Error: client dissconnected before completting request"
+        print(message)
+        print(headers)
+        return message
     
-    body = json.loads(await request.body())
+    body = json.loads(body_bytes.decode())
     # print(body)
     actor = body["actor"]    
 
@@ -523,19 +533,26 @@ async def inbox(request: Request, background_tasks: BackgroundTasks, db: Session
     # debug = True
 
     # Follow request from actor
-    pub_key = get_profile(actor)["publicKey"]["publicKeyPem"]
+    incoming_actor_profile = get_profile(actor)
+    if "publicKey" in incoming_actor_profile.keys():
+        pub_key = incoming_actor_profile["publicKey"]["publicKeyPem"]
+    else:
+        print("No key for actor")
+        print(incoming_actor_profile)
+        print(body)
+        return "No key for actor"
     url = request.url._url
     
     
     parsed = urlparse(url)
     path = parsed.path
     digest = headers["digest"]
-    body = await request.body()
+    
     verify_result = verify_post_headers("", pub_key,
                                 dict(headers),
                                 path, False,
                                 digest,
-                                body.decode(), debug)
+                                body_bytes.decode(), debug)
 
     if verify_result:
         print("Signiture is valid")
@@ -598,11 +615,49 @@ async def inbox(request: Request, background_tasks: BackgroundTasks, db: Session
 
             print(json.dumps(body))
 
-        elif request_type == "Mention":
-            print("got Mention type!")
-
         elif request_type == "Create":
-            print("got request time create, unimplemented")
+            object_created = body.get("object", None)
+            object_created_type = object_created.get("type", None)
+            if object_created_type == "Note":
+                object_tos = object_created["to"]
+                object_ccs = object_created["cc"]
+                object_id = object_created["id"]
+
+                tags = object_created["tag"]
+
+                mentions = []
+
+                for tag in tags:
+                    tag_id = tag["href"]
+                    if tag["type"] == "Mention":
+                        local_actor = actor_to_address_format(tag_id)
+                        if local_actor is not None:
+                            if local_actor not in mentions:
+                                mentions.append(local_actor)
+
+                for recipient in object_tos + object_ccs:
+                    recipient_actor = actor_to_address_format(recipient)
+                
+                if recipient is not None:
+                    if recipient not in mentions:
+                        mentions.append(recipient)
+
+                local_mention = False
+                for mention in mentions:
+                    if is_local_actor(mention):
+                        group_db = get_group_by_name(db, get_handle_name(mention))
+                        if group_db is not None:
+                            print("Got mention!")
+                            local_mention = True
+
+                if local_mention:
+                    print("Add note to db and handle mentions")
+                    # note_db = create_federated_note(db, object_created)
+                    
+                    background_tasks.add_task(create_federated_note, db, object_created)
+                    return "ok"
+        elif request_type == "Delete":
+            print("Got delete request, unimplemented")
 
 
         else:

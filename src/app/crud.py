@@ -4,6 +4,7 @@
         _type_: _description_
 """
 from typing import List, Optional, Dict, Any
+import copy
 from datetime import datetime
 import uuid
 from sqlmodel import select, Session
@@ -35,32 +36,63 @@ def create_group(db: Session, item: GroupCreate) -> Group:
     return db_item
 
 
+def create_recipients_list(db, recipients: List[str], recipients_type: RecipientType) -> List[NoteRecipients]:
+    print("create_recipients_list")
+    recipients_add = []
+    for recipient in recipients:
+        recipient_to_add = {
+            "type": recipients_type,
+            "url": recipient
+        }
+
+        if "https://www.w3.org/ns/activitystreams" not in recipient:
+            profile = get_profile(recipient)
+            if profile is not None and "type" in profile.keys() and not "Collection" in profile["type"]:
+                # This is an actor, lets store this as a mention
+                recipient_to_add["actor"] = get_handle_from_url_or_create(
+                    db, recipient)
+
+        recipients_add.append(NoteRecipients(**recipient_to_add))
+
+    return recipients_add
+
 def create_internal_note(db: Session, item: NoteCreate) -> Note:
     item["created_at"] = datetime.utcnow()
 
-    def create_recipients_list(recipients: List[str], recipients_type: RecipientType) -> List[NoteRecipients]:
-        recipients_add = []
-        for recipient in recipients:
-            recipient_to_add = {
-                "type": recipients_type,
-                "url": recipient
-            }
-
-            if "https://www.w3.org/ns/activitystreams" not in recipient:
-                profile = get_profile(recipient)
-                if profile is not None and "type" in profile.keys() and not "Collection" in profile["type"]:
-                    # This is an actor, lets store this as a mention
-                    recipient_to_add["actor"] = get_handle_from_url_or_create(
-                        db, recipient)
-
-            recipients_add.append(NoteRecipients(**recipient_to_add))
-
-        return recipients_add
-
-    cc = create_recipients_list(item["cc"], RecipientType.cc)
-    to = create_recipients_list(item["to"], RecipientType.to)
+    cc = create_recipients_list(db, item["cc"], RecipientType.cc)
+    to = create_recipients_list(db, item["to"], RecipientType.to)
 
     item["recipients"] = cc + to
+    db_note_item = Note(**item)
+
+    db.add(db_note_item)
+    db.commit()
+    db.refresh(db_note_item)
+    return db_note_item
+
+def create_federated_note(db: Session, item: NoteCreate) -> Note:
+    cc = create_recipients_list(db, item["cc"], RecipientType.cc)
+    to = create_recipients_list(db, item["to"], RecipientType.to)
+    item["recipients"] = cc + to
+
+    item = copy.copy(item)
+
+    if "attributedTo" not in item.keys():
+        return
+    
+    if "actor" not in item.keys():
+        item["actor"] = item["attributedTo"]
+
+    for key in ["content", "source", "summary"]:
+        if key not in item.keys():
+            item[key] = ""
+
+    if type(item["actor"]) == str:
+        item["actor"] = get_handle_from_url_or_create(db, item["actor"])
+
+    if type(item["attributedTo"]) == str:
+        item["attributed"] = get_handle_from_url_or_create(db, item["attributedTo"])
+
     db_note_item = Note(**item)
 
     db.add(db_note_item)
@@ -71,27 +103,8 @@ def create_internal_note(db: Session, item: NoteCreate) -> Note:
 def create_boost(db: Session, item: BoostCreate) -> Boost:
     item["created_at"] = datetime.utcnow()
 
-    def create_recipients_list(recipients: List[str], recipients_type: RecipientType) -> List[BoostRecipients]:
-        recipients_add = []
-        for recipient in recipients:
-            recipient_to_add = {
-                "type": recipients_type,
-                "url": recipient
-            }
-
-            if "https://www.w3.org/ns/activitystreams" not in recipient:
-                profile = get_profile(recipient)
-                if profile is not None and "type" in profile.keys() and not "Collection" in profile["type"]:
-                    # This is an actor, lets store this as a mention
-                    recipient_to_add["actor"] = get_handle_from_url_or_create(
-                        db, recipient)
-
-            recipients_add.append(BoostRecipients(**recipient_to_add))
-
-        return recipients_add
-
-    cc = create_recipients_list(item["cc"], RecipientType.cc)
-    to = create_recipients_list(item["to"], RecipientType.to)
+    cc = create_recipients_list(db, item["cc"], RecipientType.cc)
+    to = create_recipients_list(db, item["to"], RecipientType.to)
 
     item["recipients"] = cc + to
 
