@@ -2,7 +2,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 import os
-from .common import ensure_dir
+from app.common import ensure_dir
 
 def generate_keys(path):
     # generate private/public key pair

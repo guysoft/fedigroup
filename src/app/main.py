@@ -6,14 +6,14 @@ from fastapi.staticfiles import StaticFiles
 from typing import Optional, List
 # from sqlalchemy.orm import Session
 from sqlmodel import Session
-from .make_ssh_key import generate_keys
-from .crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, get_members_list, get_note, get_groups, create_federated_note
-from .db import Group, Members, SessionLocal, database
-from .common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str, is_local_actor, get_handle_name
-from .schemas import GroupCreateForm
+from app.make_ssh_key import generate_keys
+from app.crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, get_members_list, get_note, get_groups, create_federated_note
+from app.db import Group, Members, SessionLocal, database
+from app.common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str, is_local_actor, get_handle_name
+from app.schemas import GroupCreateForm
 import json
-from .http_sig import send_signed, verify_post_headers
-from .get_federated_data import get_actor_inbox, actor_to_address_format, get_profile, get_actor_url
+from app.http_sig import send_signed, verify_post_headers
+from app.get_federated_data import get_actor_inbox, actor_to_address_format, get_profile, get_actor_url
 import time
 import os.path
 from urllib.parse import urlparse

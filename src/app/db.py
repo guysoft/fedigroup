@@ -5,7 +5,7 @@ from datetime import datetime
 
 from sqlmodel import Field, Relationship, SQLModel
 from sqlalchemy import UniqueConstraint
-from .common import get_config
+from app.common import get_config
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
 from sqlalchemy import Column, Integer, Enum

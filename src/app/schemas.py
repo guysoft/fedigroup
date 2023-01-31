@@ -1,8 +1,8 @@
 from typing import List
 from pydantic import BaseModel
 from sqlmodel import Field, SQLModel, DateTime, Relationship
-from .common import as_form
-from .db import Actor
+from app.common import as_form
+from app.db import Actor
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSON
 
