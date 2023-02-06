@@ -56,6 +56,27 @@ def create_recipients_list(db, recipients: List[str], recipients_type: Recipient
 
     return recipients_add
 
+
+def create_boost_recipients_list(db, recipients: List[str], recipients_type: RecipientType) -> List[BoostRecipients]:
+    print("create_recipients_list")
+    recipients_add = []
+    for recipient in recipients:
+        recipient_to_add = {
+            "type": recipients_type,
+            "url": recipient
+        }
+
+        if "https://www.w3.org/ns/activitystreams" not in recipient:
+            profile = get_profile(recipient)
+            if profile is not None and "type" in profile.keys() and not "Collection" in profile["type"]:
+                # This is an actor, lets store this as a mention
+                recipient_to_add["actor"] = get_handle_from_url_or_create(
+                    db, recipient)
+
+        recipients_add.append(BoostRecipients(**recipient_to_add))
+
+    return recipients_add
+
 def create_internal_note(db: Session, item: NoteCreate) -> Note:
     item["created_at"] = datetime.utcnow()
 
@@ -103,8 +124,8 @@ def create_federated_note(db: Session, item: NoteCreate) -> Note:
 def create_boost(db: Session, item: BoostCreate) -> Boost:
     item["created_at"] = datetime.utcnow()
 
-    cc = create_recipients_list(db, item["cc"], RecipientType.cc)
-    to = create_recipients_list(db, item["to"], RecipientType.to)
+    cc = create_boost_recipients_list(db, item["cc"], RecipientType.cc)
+    to = create_boost_recipients_list(db, item["to"], RecipientType.to)
 
     item["recipients"] = cc + to
 
@@ -131,6 +152,16 @@ def add_actor(db: Session, item: ActorCreateRemove) -> Actor:
 
 
 def get_actor_or_create(db: Session, actor_handle: str) -> Actor:
+    """
+    The get_actor_or_create function takes in a database session and an actor@server format.
+    It then checks if the actor exists in the database, and if it does not, creates a new entry for that actor.
+    The function returns either the existing or newly created Actor object.
+    
+    :param db:Session: Used to Connect to the database.
+    :param actor_handle:str: Used to Get the actor if it exists.
+    :return: A db actor
+    
+    """
     # Get actor if exists
     actor = db.exec(select(Actor).where(Actor.name == actor_handle)).first()
 
@@ -172,6 +203,14 @@ def add_member_to_group(db: Session, item: MemberCreateRemove) -> Optional[Membe
         return db_item
     return None
 
+def member_in_group(db: Session, group_name: str, actor: Actor) -> bool:
+    # Check if exists:
+    member_in_group = db.exec(select(Members, Group).where(
+        Group.name == group_name).where(Members.member_id == actor.id)).first()
+
+    return member_in_group is not None
+        
+
 
 def remove_member_grom_group(db: Session, item: MemberCreateRemove) -> Optional[Members]:
     # Get actor if exists
@@ -186,7 +225,7 @@ def remove_member_grom_group(db: Session, item: MemberCreateRemove) -> Optional[
     group = get_group_by_name(db=db, name=item["group"])
 
     if group is None:
-        print("Error, group does not exist: " + item["group"])
+        print(f'Error, group does not exist: {item["group"]}')
         return None
 
     # Check if exists:
@@ -206,6 +245,14 @@ def get_members_list(db: Session, group: str) -> Optional[Members]:
 
 def get_note(db: Session, note_id: str) -> Optional[Note]:
     return db.exec(select(Note).where(Note.id == note_id)).first()
+
+
+def get_note_by_object_id(db: Session, note_id: str) -> Optional[Note]:
+    return db.exec(select(Note).where(Note.id == note_id)).first()
+
+
+def get_boost_by_note_id(db: Session, note_id: str) -> Optional[Boost]:
+    return db.exec(select(Boost).where(Boost.note_id == note_id)).first()
 
 
 def create_activity_to_send_from_note(db_note) -> Dict[str, Any]:

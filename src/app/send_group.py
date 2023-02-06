@@ -1,13 +1,13 @@
 # functions that use both crud and send federated data
-from typing import Any, Dict
+from typing import Any, Dict, List
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from urllib.parse import urljoin
-from app.crud import create_internal_note, get_handle_from_url_or_create, create_activity_to_send_from_note, create_activity_to_send_from_boost, get_members_list, get_group_by_name, get_actor_or_create, create_boost
-from app.common import SERVER_DOMAIN, SERVER_URL, multi_urljoin
+from app.crud import create_internal_note, get_handle_from_url_or_create, create_activity_to_send_from_note, create_activity_to_send_from_boost, get_members_list, get_group_by_name, get_actor_or_create, create_boost, create_federated_note, member_in_group
+from app.common import SERVER_DOMAIN, SERVER_URL, multi_urljoin, is_local_actor, get_handle_name, get_server_keys
 from app.send_federated_data import send_signed
 from app.get_federated_data import actor_to_address_format, get_actor_inbox, get_actor_url
-
+from app.schemas import NoteCreate
 
 def fedigroup_message(db: Session, group: str, message: str, preshared_key_id, key_path) -> Dict[str, Any]:
     """Send a group message to all members in group"""
@@ -54,12 +54,45 @@ def fedigroup_boost(db: Session, group: str, note_id: str, preshared_key_id, key
     boost_create = create_boost(db, boost_data_dict)
 
     activity = create_activity_to_send_from_boost(boost_create)
-
     send_message(db, activity, preshared_key_id, key_path, activity["to"])
     return
 
 
+def save_message_and_boost(db: Session, item: Dict[str, Any], groups: List[str]):
+    # Make sure user is a member of a group
+    author_actor_url = item["attributedTo"]
+    author_of_note = get_actor_or_create(db, actor_to_address_format(author_actor_url))
+    note_id = item["id"]
+
+    print(f'qnote_id: {note_id}")
+
+    for group in groups:
+        print(f"boosting test group: {group}")
+        actor = group + "@" + SERVER_DOMAIN
+        
+        if member_in_group(db, group, author_of_note):
+            now_datetime = datetime.now(timezone.utc)
+            boost_data_dict = {
+                "actor": get_actor_or_create(db, actor),
+                "attributed": get_actor_or_create(db, actor),
+                "created_at": now_datetime,
+                "note_id": note_id,
+                "sensitive": False,
+                "to": [multi_urljoin(SERVER_URL, "group", group, "followers"),
+                "https://www.w3.org/ns/activitystreams#Public"
+                ],
+                "cc": []
+                }
+            
+            boost = create_boost(db, boost_data_dict)
+            activity = create_activity_to_send_from_boost(boost)
+            preshared_key_id, key_path = get_server_keys(group)
+            send_message(db, activity, preshared_key_id, key_path, activity["to"])
+    return
+
+
 def send_message(db, activity, preshared_key_id, key_path, recipients):
+    inboxes = []
     for recipient in recipients:
         start_pattern = urljoin(SERVER_URL, "group/")
         end_pattern = "/followers"
@@ -69,7 +102,7 @@ def send_message(db, activity, preshared_key_id, key_path, recipients):
             group = recipient[len(start_pattern):-len(end_pattern)]
             
             db_group = get_group_by_name(db, group)
-            inboxes = []
+            
             if db_group is not None:
                 members = db_group.members
             

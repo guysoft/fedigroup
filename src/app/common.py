@@ -1,7 +1,7 @@
 import os
 import yaml
 import inspect
-from typing import Type
+from typing import Type, Tuple
 from urllib.parse import urljoin, quote_plus, urlparse
 
 from fastapi import Form
@@ -98,3 +98,11 @@ def is_local_actor(actor_handle):
         user = actor_handle.split("@")[0]
         return True
     return False
+
+def get_server_keys(group: str) -> Tuple[str, str]:
+    """
+    Return the server keys to share posts
+    """
+    preshared_key_id = multi_urljoin(SERVER_URL, "group", group) + "#main-key"
+    key_path = "/data/default_gpg_key/id_rsa"
+    return preshared_key_id, key_path

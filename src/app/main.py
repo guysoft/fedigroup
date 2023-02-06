@@ -7,10 +7,16 @@ from typing import Optional, List
 # from sqlalchemy.orm import Session
 from sqlmodel import Session
 from app.make_ssh_key import generate_keys
-from app.crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, get_members_list, get_note, get_groups, create_federated_note
+
+from app.crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, \
+get_members_list, get_note, get_groups, create_federated_note, get_boost_by_note_id
+
 from app.db import Group, Members, SessionLocal, database
-from app.common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str, is_local_actor, get_handle_name
+from app.common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str, \
+is_local_actor, get_handle_name
+
 from app.schemas import GroupCreateForm
+from app.send_group import save_message_and_boost
 import json
 from app.http_sig import send_signed, verify_post_headers
 from app.get_federated_data import get_actor_inbox, actor_to_address_format, get_profile, get_actor_url
@@ -642,19 +648,23 @@ async def inbox(request: Request, background_tasks: BackgroundTasks, db: Session
                     if recipient not in mentions:
                         mentions.append(recipient)
 
-                local_mention = False
+                local_mentions = []
                 for mention in mentions:
                     if is_local_actor(mention):
-                        group_db = get_group_by_name(db, get_handle_name(mention))
+                        group = get_handle_name(mention)
+                        group_db = get_group_by_name(db, group)
                         if group_db is not None:
                             print("Got mention!")
-                            local_mention = True
+                            local_mentions.append(group)
 
-                if local_mention:
-                    print("Add note to db and handle mentions")
-                    # note_db = create_federated_note(db, object_created)
-                    
-                    background_tasks.add_task(create_federated_note, db, object_created)
+                if len(local_mentions) > 0:
+                    print("Add boost to db and handle mentions")
+                    boost_db = get_boost_by_note_id(db, note_id=object_id)
+                    if boost_db is None:
+                        print(f"processing: {object_id}")
+                        background_tasks.add_task(save_message_and_boost, db, object_created, local_mentions)
+                    else:
+                        print(f"Already got: {object_id}")
                     return "ok"
         elif request_type == "Delete":
             print("Got delete request, unimplemented")
