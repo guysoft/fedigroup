@@ -64,7 +64,7 @@ def save_message_and_boost(db: Session, item: Dict[str, Any], groups: List[str])
     author_of_note = get_actor_or_create(db, actor_to_address_format(author_actor_url))
     note_id = item["id"]
 
-    print(f'qnote_id: {note_id}")
+    print(f"note_id: {note_id}")
 
     for group in groups:
         print(f"boosting test group: {group}")
