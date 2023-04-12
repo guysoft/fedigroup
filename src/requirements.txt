@@ -1,4 +1,5 @@
 fastapi
+fastapi-login
 uvicorn
 jinja2
 pyaml
@@ -12,3 +13,4 @@ python-multipart
 sqlmodel
 requests
 typer[all]
+mastdon.py

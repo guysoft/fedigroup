@@ -3,7 +3,7 @@ import sqlalchemy
 from pydantic import BaseModel
 from datetime import datetime
 
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, ARRAY, Relationship, SQLModel, select, String
 from sqlalchemy import UniqueConstraint
 from app.common import get_config
 from sqlalchemy.orm import sessionmaker
@@ -12,7 +12,9 @@ from sqlalchemy import Column, Integer, Enum
 from typing import List, Optional
 from sqlalchemy.dialects.postgresql import JSON
 import databases
-
+import secrets
+import string
+SECRET_SIZE = 10
 
 config = get_config()
 DATABASE_URL = config["main"]["database_url"]
@@ -20,6 +22,14 @@ DATABASE_URL = config["main"]["database_url"]
 DATABASE_URL = config["main"]["database_url"]
 database = databases.Database(DATABASE_URL)
 
+class Setting(SQLModel, table=True):
+    __tablename__ = "settings"
+    __table_args__ = (UniqueConstraint("name"),)
+    name: str = Field(primary_key=True)
+    text_setting: str = Field(nullable=True)
+    boolean_setting: bool = Field(nullable=True)
+    integer_setting: int = Field(nullable=True)
+    float_setting: float = Field(nullable=True)
 
 class RecipientType(str, enum.Enum):
     to = "to"
@@ -184,10 +194,33 @@ class NoteTags(SQLModel, table=True):
     __tablename__ = "notes_tags"
     __table_args__ = {'extend_existing': True}
     id: Optional[int] = Field(default=None, primary_key=True)
-    actor: int = Field(default=None, foreign_key="notes.id")
-    actor: int = Field(default=None, foreign_key="tags.id")
+    note: int = Field(default=None, foreign_key="notes.id")
+    tag: int = Field(default=None, foreign_key="tags.id")
 
 
+class OauthApp(SQLModel, table=True):
+    __tablename__ = "oauth_app"
+    __table_args__ = {'extend_existing': True}
+    id: Optional[int] = Field(default=None, primary_key=True)
+    domain: str = Field()
+    client_id: str = Field()
+    client_secret: str = Field()
+    scopes: List[str] = Field(sa_column=Column(ARRAY(String)))
+
+
+class OauthCode(SQLModel, table=True):
+    __tablename__ = "oauth_codes"
+    __table_args__ = {'extend_existing': True}
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    oauth_app_id: int = Field(foreign_key="oauth_app.id")
+    oauth_app: Optional[OauthApp] = Relationship()
+    
+    actor_id: Optional[int] = Field(foreign_key="actors.id")
+    actor: Optional[Actor] = Relationship()
+
+    state: str = Field()
+    code: Optional[str] = Field(default=None)
     
 # metadata = sqlalchemy.MetaData()
 
@@ -203,11 +236,31 @@ class NoteTags(SQLModel, table=True):
 #     sqlalchemy.Column("discoverable", sqlalchemy.Boolean),
 # )
 
+# Init
 engine = sqlalchemy.create_engine(
     DATABASE_URL, 
     # echo=True
 )
 SQLModel.metadata.create_all(engine)
 
-
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, class_=Session)
+
+# init config values
+def init_db(SessionLocal):
+    db = SessionLocal()
+    login_secret = "login_secret"
+    secret = db.exec(select(Setting).where(Setting.name == login_secret)).first()
+
+    if secret is None:
+        item = {
+            "name": login_secret,
+            "text_setting": ''.join(secrets.choice(string.ascii_uppercase + string.ascii_lowercase) for i in range(SECRET_SIZE))
+        }
+
+        db_item = Setting(**item)
+        db.add(db_item)
+        db.commit()
+        db.refresh(db_item)
+
+
+init_db(SessionLocal)

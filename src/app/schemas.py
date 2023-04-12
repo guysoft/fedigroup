@@ -16,6 +16,12 @@ class MemberBase(BaseModel):
 class ActorBase(BaseModel):
     pass
 
+class OauthAppBase(BaseModel):
+    pass
+
+class OauthCodeBase(BaseModel):
+    pass
+
 class NoteBase(BaseModel):
     pass
 
@@ -36,12 +42,22 @@ class GroupCreateForm(BaseModel):
     name: str
     summary: str
 
+@as_form
+class OauthLogin(BaseModel):
+    username: str
+
 class MemberCreateRemove(MemberBase):
     group: str
     member: str
     
 class ActorCreateRemove(ActorBase):
     actor: str
+
+class OauthAppCreateRemove(OauthAppBase):
+    domain: str
+    client_id: str
+    client_secret: str
+    scopes: List[str]
 
 class NoteCreate(NoteBase):
     actor: int

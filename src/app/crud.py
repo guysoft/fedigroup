@@ -8,11 +8,14 @@ import copy
 from datetime import datetime
 import uuid
 from sqlmodel import select, Session
-from app.schemas import GroupCreate, MemberCreateRemove, ActorCreateRemove, NoteCreate, BoostCreate
-from app.db import Group, Members, Actor, Note, Boost, RecipientType, NoteRecipients, BoostRecipients
+from app.schemas import GroupCreate, MemberCreateRemove, ActorCreateRemove, OauthAppCreateRemove,\
+ NoteCreate, BoostCreate
+from app.db import Group, Members, Actor, Note, Boost, RecipientType, NoteRecipients, BoostRecipients, \
+OauthApp, OauthCode
 from app.common import SERVER_URL, datetime_str
 
 from app.get_federated_data import get_profile, actor_to_address_format, get_actor_url
+from app.mastodonapi import register_oauth_application, generate_oauth_state
 
 # CRUD comes from: Create, Read, Update, and Delete.
 
@@ -150,6 +153,12 @@ def add_actor(db: Session, item: ActorCreateRemove) -> Actor:
     db.refresh(db_item)
     return db_item
 
+def add_oauth_secret(db: Session, item: OauthAppCreateRemove) -> OauthApp:
+    db_item = OauthApp(**item)
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
 
 def get_actor_or_create(db: Session, actor_handle: str) -> Actor:
     """
@@ -327,3 +336,56 @@ def create_activity_to_send_from_boost(db_boost) -> Dict[str, Any]:
    "type":"Announce"
     }
     return activity
+
+def get_domain_app_id_or_create(db: Session, domain: str, scopes: List[str]) -> OauthApp:
+    scops = sorted(scopes)
+    # Get oauth_secret if exists
+    oauth_secret = db.exec(select(OauthApp).where(OauthApp.domain == domain).where(OauthApp.scopes == scopes)).first()
+
+    if oauth_secret is None:
+        client_id, client_secret = register_oauth_application(domain, scopes)
+
+        oauth_secret_entry = {
+            "domain": domain,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scopes": scopes,
+        }
+        oauth_secret = add_oauth_secret(db=db, item=oauth_secret_entry)
+    return oauth_secret
+
+def add_initial_oauth_code(db: Session, scopes: List[str], user: str, oauth_app: OauthApp) -> OauthCode:
+    state = generate_oauth_state()
+
+    actor_handle = f"{user}@{oauth_app.domain}"
+    actor = get_actor_or_create(db, actor_handle)
+    oauth_code = db.exec(select(OauthCode).where(OauthCode.actor_id == actor.id).where(OauthApp.scopes == scopes)).first()
+
+    if oauth_code is None:
+        item = {
+            "oauth_app_id": oauth_app.id,
+            "actor_id": actor.id,
+            "state": state
+        }
+        oauth_code = OauthCode(**item)
+        db.add(oauth_code)
+        db.commit()
+        db.refresh(oauth_code)
+    else:
+        oauth_code.oauth_app_id = oauth_app.id
+        oauth_code.actor_id = actor.id
+        oauth_code.state = state
+        oauth_code.code = None
+        db.commit()
+        db.refresh(oauth_code)
+    return oauth_code
+
+def update_oauth_code(db: Session, state: str, code: str):
+    oauth_code = db.exec(select(OauthCode).where(OauthCode.state == state).where(OauthCode.code == None)).first()
+
+    if oauth_code is not None:
+        oauth_code.code = code
+        db.commit()
+        db.refresh(oauth_code)
+        return oauth_code
+    return

@@ -9,13 +9,14 @@ from sqlmodel import Session
 from app.make_ssh_key import generate_keys
 
 from app.crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, \
-get_members_list, get_note, get_groups, create_federated_note, get_boost_by_note_id
+get_members_list, get_note, get_groups, create_federated_note, get_boost_by_note_id, get_domain_app_id_or_create, \
+add_initial_oauth_code, update_oauth_code
 
 from app.db import Group, Members, SessionLocal, database
 from app.common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str, \
 is_local_actor, get_handle_name
 
-from app.schemas import GroupCreateForm
+from app.schemas import GroupCreateForm, OauthLogin
 from app.send_group import save_message_and_boost
 import json
 from app.http_sig import send_signed, verify_post_headers
@@ -24,6 +25,9 @@ import time
 import os.path
 from urllib.parse import urlparse
 import starlette
+from fastapi_login import LoginManager
+from starlette.responses import RedirectResponse
+from app.mastodonapi import get_oauth_url
 
 config = get_config()
 SERVER_DOMAIN = config["main"]["server_url"]
@@ -678,4 +682,80 @@ async def inbox(request: Request, background_tasks: BackgroundTasks, db: Session
         return "Signature was not valid"
 
     return
+
+
+@app.get('/oauth_login')
+async def oauth_login(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    return templates.TemplateResponse("oauth_login.html", {"request": request, "data": {}})
+
+@app.post('/oauth_login_submit')
+async def oauth_login_submit(request: Request, form: GroupCreateForm = Depends(OauthLogin.as_form), db: Session = Depends(get_db)):
+    scopes = ("read",)
+    username_data = form.username.split("@")
+    if len(username_data) != 2:
+        return {"error": "username is requried to be in he format user@server.tld, there should be only one at sign"}
+
+    domain = username_data[1]
+    user = username_data[0]
+    # TODO timeout on fail of server to create token
+    oauth_app = get_domain_app_id_or_create(db, domain, scopes)
+
+    client_id = oauth_app.client_id
+    client_secret = oauth_app.client_secret
+
+    oauth_code = add_initial_oauth_code(db, scopes, user, oauth_app)
+
+    redirect_url = get_oauth_url(client_id, client_secret, domain, oauth_code.state, scopes)
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
+@app.get('/oauth_login_code')
+async def oauth_login_code(request: Request, code: str, state: str, db: Session = Depends(get_db)):
+    # TODO: make this actually create a session an redirect correctly
+    redirect_url = "/"
+    params = request.path_params
+
+    update_oauth_code(db, state, code)
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
+@app.post('/debug_request')
+@app.get('/debug_request')
+async def debug_request(request: Request, background_tasks: BackgroundTasks):
+
+    # called_from = request.url.path
+    headers = request.headers
+    user_agent = headers.get("user-agent")
+    algorithm = headers.get("rsa-sha256")
+    signature = headers.get("signature")
+    date_sig = headers.get("date")
+
+    body_bytes = None
+    try:
+        body_bytes = await request.body()
+    except starlette.requests.ClientDisconnect:
+        message = "Error: client dissconnected before completting request"
+        print(message)
+        print(headers)
+        print(request.path_params)
+        return message
     
+    body = body_bytes.decode()# json.loads(body_bytes.decode())
+    print(body)
+    print(headers)
+    print(request.path_params)
+
+
+    # Debug data
+    # print(request.path_params)
+    # print("headers:")
+    # print(headers)
+    # print(signature)
+    # print("a:")
+    # print(await request.form())
+    # data = [i async for i in request.stream()]
+    # print(data)
+    # print("object_str:")
+    # print(object_str)
+    # print(object)
+    return {'debug': "request"}
