@@ -4,7 +4,7 @@ uvicorn
 jinja2
 pyaml
 cryptography
-sqlalchemy
+sqlalchemy==1.4.35 # https://github.com/tiangolo/sqlmodel/issues/383#issuecomment-1193373160
 databases
 # psycopg2-binary
 psycopg2==2.9.3
