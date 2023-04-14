@@ -121,6 +121,8 @@ class Actor(SQLModel, table=True):
 
     groups_in: List[Members] = Relationship(back_populates="member")
 
+    codes: List["OauthCode"] = Relationship(back_populates="actor")
+
 
 
 # Notes are in-server status messages
@@ -207,6 +209,8 @@ class OauthApp(SQLModel, table=True):
     client_secret: str = Field()
     scopes: List[str] = Field(sa_column=Column(ARRAY(String)))
 
+    codes: List["OauthCode"] = Relationship(back_populates="oauth_app")
+
 
 class OauthCode(SQLModel, table=True):
     __tablename__ = "oauth_codes"
@@ -214,10 +218,12 @@ class OauthCode(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
     oauth_app_id: int = Field(foreign_key="oauth_app.id")
-    oauth_app: Optional[OauthApp] = Relationship()
+    oauth_app: OauthApp = Relationship(back_populates="codes",
+    sa_relationship_kwargs={"primaryjoin": "OauthCode.oauth_app_id==OauthApp.id",
+    "viewonly": True})
     
-    actor_id: Optional[int] = Field(foreign_key="actors.id")
-    actor: Optional[Actor] = Relationship()
+    actor_id: int = Field(foreign_key="actors.id")
+    actor: Actor = Relationship(back_populates="codes")
 
     state: str = Field()
     code: Optional[str] = Field(default=None)
@@ -264,3 +270,11 @@ def init_db(SessionLocal):
 
 
 init_db(SessionLocal)
+
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

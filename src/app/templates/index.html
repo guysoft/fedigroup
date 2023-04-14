@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}FastAPI Starter{% endblock %}
+{% block head %}
+{{ super() }}
+{% endblock %}
+
+{% block page_content %}
+{% include 'include/sidebar.html' %}
+<main role="main" class="container">
+    <div class="row">
+        <div class="col">
+            <!-- {{data.text|safe}} -->
+            <h1>Main Page</h1>
+
+            {% if data["logged_in"] %}
+            {{ data["username"] }}
+            {% else %}
+            Not logged in
+            {% endif %}
+
+
+            
+        </form>
+        </div>
+    </div>
+</main><!-- /.container -->
+
+<!-- {{data.page}} -->
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

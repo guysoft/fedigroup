@@ -1,5 +1,5 @@
 import re
-from fastapi import FastAPI, Request, Header, Response, Form, Depends, BackgroundTasks
+from fastapi import FastAPI, Request, Header, Response, Form, Depends, BackgroundTasks, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -10,7 +10,7 @@ from app.make_ssh_key import generate_keys
 
 from app.crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, \
 get_members_list, get_note, get_groups, create_federated_note, get_boost_by_note_id, get_domain_app_id_or_create, \
-add_initial_oauth_code, update_oauth_code
+add_initial_oauth_code, update_oauth_code, get_settings_secret
 
 from app.db import Group, Members, SessionLocal, database
 from app.common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str, \
@@ -26,8 +26,17 @@ import os.path
 from urllib.parse import urlparse
 import starlette
 from fastapi_login import LoginManager
+from fastapi.responses import JSONResponse
 from starlette.responses import RedirectResponse
-from app.mastodonapi import get_oauth_url
+from app.mastodonapi import get_oauth_url, confirm_actor_valid, REDIERCT_URI_BACKEND, REDIERCT_URI_FRONTEND
+
+from app.auth import Settings, User
+
+from fastapi_jwt_auth import AuthJWT
+from fastapi_jwt_auth.exceptions import AuthJWTException
+import app.frontend as frontend
+
+from app.db import get_db
 
 config = get_config()
 SERVER_DOMAIN = config["main"]["server_url"]
@@ -37,14 +46,6 @@ app = FastAPI()
 
 templates = Jinja2Templates(directory=os.path.join(DIR, "templates"))
 app.mount("/static", StaticFiles(directory=os.path.join(DIR, "static")), name="static")
-
-# Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @app.on_event("startup")
 async def startup():
@@ -73,17 +74,28 @@ def get_default_gpg():
         return_value = f.read()
     return return_value
 
-@app.head("/")
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
+@app.head("/noui")
+@app.get("/noui")
+async def root(request: Request, db: Session = Depends(get_db), Authorize: AuthJWT = Depends()):
+    Authorize.jwt_optional()
+    username = Authorize.get_jwt_subject()
+    logged_in = username is not None
+    page_data = {
+        "request": request,
+        "data": {
+            "logged_in": logged_in,
+            "username": username
+        }
+    }
+    return templates.TemplateResponse("index.html", page_data)
 
 @app.get("/items_j/{id}", response_class=HTMLResponse)
 async def read_item(request: Request, id: str):
     return templates.TemplateResponse("item.html", {"request": request, "id": id})
 
 @app.get("/create_group", response_class=HTMLResponse)
-async def create_group_route(request: Request):
+async def create_group_route(request: Request, Authorize: AuthJWT = Depends()):
+    Authorize.jwt_required()
     return templates.TemplateResponse("create_group.html", {"request": request, "data": {}})
 
 
@@ -695,6 +707,10 @@ async def oauth_login_submit(request: Request, form: GroupCreateForm = Depends(O
     if len(username_data) != 2:
         return {"error": "username is requried to be in he format user@server.tld, there should be only one at sign"}
 
+    redirect_uri = REDIERCT_URI_BACKEND
+    if form.login_type == "frontend":
+        redirect_uri = REDIERCT_URI_FRONTEND
+
     domain = username_data[1]
     user = username_data[0]
     # TODO timeout on fail of server to create token
@@ -705,19 +721,39 @@ async def oauth_login_submit(request: Request, form: GroupCreateForm = Depends(O
 
     oauth_code = add_initial_oauth_code(db, scopes, user, oauth_app)
 
-    redirect_url = get_oauth_url(client_id, client_secret, domain, oauth_code.state, scopes)
+    redirect_url = get_oauth_url(client_id, client_secret, domain, oauth_code.state, scopes, redirect_uri)
     return RedirectResponse(url=redirect_url, status_code=303)
 
-
+@app.post('/oauth_login_code')
 @app.get('/oauth_login_code')
-async def oauth_login_code(request: Request, code: str, state: str, db: Session = Depends(get_db)):
-    # TODO: make this actually create a session an redirect correctly
-    redirect_url = "/"
+async def oauth_login_code(request: Request, code: str, state: str, db: Session = Depends(get_db), Authorize: AuthJWT = Depends()):
+    redirect_url = "/protected"
     params = request.path_params
 
-    update_oauth_code(db, state, code)
-    return RedirectResponse(url=redirect_url, status_code=303)
+    oauth_code = update_oauth_code(db, state, code)
+    if oauth_code is None:
+        return {"error": "Code did not match existing expected state"}
 
+    oauth_app = oauth_code.oauth_app
+    domain = oauth_app.domain
+    client_id = oauth_app.client_id
+    client_secret = oauth_app.client_secret
+    code = oauth_code.code
+    actor_handle = oauth_code.actor.name
+    scopes = oauth_app.scopes
+
+    if confirm_actor_valid(domain, client_id, client_secret, scopes, code, actor_handle):
+        # Create the tokens and passing to set_access_cookies or set_refresh_cookies
+        access_token = Authorize.create_access_token(subject=actor_handle)
+        refresh_token = Authorize.create_refresh_token(subject=actor_handle)
+
+        # Set the JWT and CSRF double submit cookies in the response
+        Authorize.set_access_cookies(access_token)
+        Authorize.set_refresh_cookies(refresh_token)
+        
+        return {"login": "success"}
+    else:
+        return {"error": "Code not valid and did not work on instance"}
 
 @app.post('/debug_request')
 @app.get('/debug_request')
@@ -759,3 +795,81 @@ async def debug_request(request: Request, background_tasks: BackgroundTasks):
     # print(object_str)
     # print(object)
     return {'debug': "request"}
+
+
+@AuthJWT.load_config
+def get_config():
+    secret = get_settings_secret(next(get_db()))
+    return Settings(authjwt_secret_key=secret)
+
+@app.exception_handler(AuthJWTException)
+def authjwt_exception_handler(request: Request, exc: AuthJWTException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.message}
+    )
+
+@app.post('/login')
+def login(user: User, Authorize: AuthJWT = Depends()):
+    """
+    With authjwt_cookie_csrf_protect set to True, set_access_cookies() and
+    set_refresh_cookies() will now also set the non-httponly CSRF cookies
+    """
+    if user.username != "test" or user.password != "test":
+        raise HTTPException(status_code=401,detail="Bad username or password")
+
+    # Create the tokens and passing to set_access_cookies or set_refresh_cookies
+    access_token = Authorize.create_access_token(subject=user.username)
+    refresh_token = Authorize.create_refresh_token(subject=user.username)
+
+    # Set the JWT and CSRF double submit cookies in the response
+    Authorize.set_access_cookies(access_token)
+    Authorize.set_refresh_cookies(refresh_token)
+    return {"msg":"Successfully login"}
+
+@app.post('/refresh')
+def refresh(Authorize: AuthJWT = Depends()):
+    Authorize.jwt_refresh_token_required()
+
+    current_user = Authorize.get_jwt_subject()
+    new_access_token = Authorize.create_access_token(subject=current_user)
+    # Set the JWT and CSRF double submit cookies in the response
+    Authorize.set_access_cookies(new_access_token)
+    return {"msg":"The token has been refresh"}
+
+@app.get('/get_username')
+def get_username(Authorize: AuthJWT = Depends()):
+    Authorize.jwt_refresh_token_required()
+    current_user = Authorize.get_jwt_subject()
+    return {"username": current_user}
+
+@app.delete('/logout')
+@app.get('/logout')
+def logout(request: Request,Authorize: AuthJWT = Depends()):
+    """
+    Because the JWT are stored in an httponly cookie now, we cannot
+    log the user out by simply deleting the cookie in the frontend.
+    We need the backend to send us a response to delete the cookies.
+    """
+    Authorize.jwt_required()
+
+    Authorize.unset_jwt_cookies()
+
+    return {"msg":"Successfully logout"}
+    page_data = {
+        "request": request,
+        "data": {
+            "logged_in": False,
+            "username": None
+        }
+    }
+    return templates.TemplateResponse("index.html", page_data)
+
+@app.get('/protected')
+def protected(Authorize: AuthJWT = Depends()):
+    Authorize.jwt_required()
+
+    current_user = Authorize.get_jwt_subject()
+    return {"user": current_user}
+
+frontend.init(app)

@@ -45,6 +45,7 @@ class GroupCreateForm(BaseModel):
 @as_form
 class OauthLogin(BaseModel):
     username: str
+    login_type: str
 
 class MemberCreateRemove(MemberBase):
     group: str

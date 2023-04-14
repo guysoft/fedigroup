@@ -5,16 +5,23 @@
     </div>
 
     <div class="sidebar-header">
-        <h3>FastAPI Web Starter</h3>
+        <h3><a href="/">Fedigroup</a></h3>
     </div>
 
     <ul class="list-unstyled components">
+        {% if data["logged_in"] %}
         <li class="active">
             <a href="/create_group">Create Group</a>
-    </ul>
-    <ul class="list-unstyled components">
+        </li>
+        <li class="active">
+            {{data["username"]}} <a href="/logout">Logout</a>
+        </li>
+        {% else %}
+            
         <li class="active">
             <a href="/oauth_login">Login from federated instace</a>
+        </li>
+        {% endif %}
     </ul>
 </nav>
 

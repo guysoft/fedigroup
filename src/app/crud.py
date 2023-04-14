@@ -11,7 +11,7 @@ from sqlmodel import select, Session
 from app.schemas import GroupCreate, MemberCreateRemove, ActorCreateRemove, OauthAppCreateRemove,\
  NoteCreate, BoostCreate
 from app.db import Group, Members, Actor, Note, Boost, RecipientType, NoteRecipients, BoostRecipients, \
-OauthApp, OauthCode
+OauthApp, OauthCode, Setting
 from app.common import SERVER_URL, datetime_str
 
 from app.get_federated_data import get_profile, actor_to_address_format, get_actor_url
@@ -380,7 +380,18 @@ def add_initial_oauth_code(db: Session, scopes: List[str], user: str, oauth_app:
         db.refresh(oauth_code)
     return oauth_code
 
-def update_oauth_code(db: Session, state: str, code: str):
+def update_oauth_code(db: Session, state: str, code: str) -> Optional[Actor]:
+    """Once we logged in, we can also give the user an access token for the fedigroup instance
+    So we can now return the actor, None if it failed
+
+    Args:
+        db (Session): the db session
+        state (str): The state we got
+        code (str): The code
+
+    Returns:
+        Actor: The user we are logged in as
+    """
     oauth_code = db.exec(select(OauthCode).where(OauthCode.state == state).where(OauthCode.code == None)).first()
 
     if oauth_code is not None:
@@ -389,3 +400,7 @@ def update_oauth_code(db: Session, state: str, code: str):
         db.refresh(oauth_code)
         return oauth_code
     return
+
+def get_settings_secret(db):
+    secret = db.exec(select(Setting).where(Setting.name == "login_secret")).first()
+    return secret.text_setting

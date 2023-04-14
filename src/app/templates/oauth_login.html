@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Oauth Login{% endblock %}
+{% block head %}
+{{ super() }}
+{% endblock %}
+
+{% block page_content %}
+{% include 'include/sidebar.html' %}
+<main role="main" class="container">
+    <div class="row">
+        <div class="col">
+            <!-- {{data.text|safe}} -->
+            <h1>Login from federated instance</h1>
+            <form action="/oauth_login_submit" method="POST">
+            Username (eg user@instance.tld): <input name="username" type="text"/><br/>
+            <input type="hidden" id="login_type" name="login_type" value="backend">
+            <button type="botton" class="btn btn-primary">Login</button>
+            </form>
+        </div>
+    </div>
+</main><!-- /.container -->
+
+<!-- {{data.page}} -->
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

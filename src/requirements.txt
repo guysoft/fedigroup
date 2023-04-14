@@ -1,5 +1,6 @@
 fastapi
 fastapi-login
+fastapi_jwt_auth
 uvicorn
 jinja2
 pyaml
@@ -14,3 +15,4 @@ sqlmodel
 requests
 typer[all]
 mastdon.py
+nicegui
