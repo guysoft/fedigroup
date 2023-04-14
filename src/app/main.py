@@ -89,10 +89,6 @@ async def root(request: Request, db: Session = Depends(get_db), Authorize: AuthJ
     }
     return templates.TemplateResponse("index.html", page_data)
 
-@app.get("/items_j/{id}", response_class=HTMLResponse)
-async def read_item(request: Request, id: str):
-    return templates.TemplateResponse("item.html", {"request": request, "id": id})
-
 @app.get("/create_group", response_class=HTMLResponse)
 async def create_group_route(request: Request, Authorize: AuthJWT = Depends()):
     Authorize.jwt_required()
