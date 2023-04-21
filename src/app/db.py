@@ -9,7 +9,7 @@ from app.common import get_config
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
 from sqlalchemy import Column, Integer, Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 from sqlalchemy.dialects.postgresql import JSON
 import databases
 import secrets
@@ -143,7 +143,7 @@ class Note(SQLModel, table=True):
 
     content: str = Field()
     source: str = Field()
-    summary: str = Field()
+    summary: Optional[str] = None
     # # I think this is used in OStatus stuff: https://socialhub.activitypub.rocks/t/context-vs-conversation/578/7
     # # conversation: str = Field()
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
@@ -173,8 +173,8 @@ class Boost(SQLModel, table=True):
 
     content: str = Field()
     note_id: str = Field() # What we are boosting
-    source: str = Field()
-    summary: str = Field()
+    source: Dict = Field(default=[], sa_column=Column(JSON))
+    summary: Optional[str] = None
     # # I think this is used in OStatus stuff: https://socialhub.activitypub.rocks/t/context-vs-conversation/578/7
     # # conversation: str = Field()
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
