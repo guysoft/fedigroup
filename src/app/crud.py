@@ -14,7 +14,7 @@ from app.db import Group, Members, Actor, Note, Boost, RecipientType, NoteRecipi
 OauthApp, OauthCode, Setting
 from app.common import SERVER_URL, datetime_str
 
-from app.get_federated_data import get_profile, actor_to_address_format, get_actor_url
+from app.get_federated_data import get_profile, actor_to_address_format, get_actor_url, get_federated_note
 from app.mastodonapi import register_oauth_application, generate_oauth_state
 
 # CRUD comes from: Create, Read, Update, and Delete.
@@ -132,10 +132,11 @@ def create_boost(db: Session, item: BoostCreate) -> Boost:
 
     item["recipients"] = cc + to
 
-    # TODO: Load in content of boost
-    item["content"] = ""
-    item["source"] = ""
-    item["summary"] = ""
+    federated_note_data = get_federated_note(item["note_id"])
+    item["content"] = federated_note_data.get("content", "")
+    item["source"] = federated_note_data.get("source", "")
+    item["summary"] = federated_note_data.get("summary", "")
+    item["attachment"] = federated_note_data.get("attachment", [])
 
     db_boost_item = Boost(**item)
 

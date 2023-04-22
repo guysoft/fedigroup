@@ -56,6 +56,7 @@ def get_actor_inbox(actor_url, shared=False):
     return inbox
 
 def get_profile(actor_url):
+    # TODO: make this s generic function that get_profile and get_federated_note use
     headers = {
         'Accept': 'application/json',
     }
@@ -90,3 +91,6 @@ def actor_to_address_format(actor_url):
         return
     
     return data["name"] + "@" + host
+
+def get_federated_note(node_id):
+    return get_profile(node_id)
