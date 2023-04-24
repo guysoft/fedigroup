@@ -2,6 +2,7 @@
 import typer
 
 from app.send_group import fedigroup_message, fedigroup_boost
+from app.crud import get_posts_for_member
 
 from app.common import SERVER_URL, multi_urljoin
 
@@ -37,6 +38,17 @@ def boost_message(group: str, note_id: str):
     fedigroup_boost(db, group, note_id, preshared_key_id, key_path)
     db.close()
     database.disconnect()
+
+
+@app.command()
+def post_of_member(actor_handle: str):
+    db = SessionLocal()
+    database.connect()
+    for post in get_posts_for_member(db, actor_handle):
+        print(f'{post.content} at {post.created_at}')
+    db.close()
+    database.disconnect()
+
 
 
 
