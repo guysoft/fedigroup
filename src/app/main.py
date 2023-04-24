@@ -32,8 +32,8 @@ from app.mastodonapi import get_oauth_url, confirm_actor_valid, REDIERCT_URI_BAC
 
 from app.auth import Settings, User
 
-from fastapi_jwt_auth import AuthJWT
-from fastapi_jwt_auth.exceptions import AuthJWTException
+from fastapi_another_jwt_auth import AuthJWT
+from fastapi_another_jwt_auth.exceptions import AuthJWTException
 import app.frontend as frontend
 
 from app.db import get_db
@@ -41,6 +41,9 @@ from app.db import get_db
 config = get_config()
 SERVER_DOMAIN = config["main"]["server_url"]
 SERVER_URL = "https://" + SERVER_DOMAIN
+
+from app.db import SessionLocal, init_db
+init_db(SessionLocal)
 
 app = FastAPI()
 

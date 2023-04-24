@@ -1,11 +1,13 @@
 fastapi
 fastapi-login
-fastapi_jwt_auth
+# fastapi_jwt_auth
+fastapi-another-jwt-auth
 uvicorn
 jinja2
 pyaml
 cryptography
 sqlalchemy==1.4.35 # https://github.com/tiangolo/sqlmodel/issues/383#issuecomment-1193373160
+alembic
 databases
 # psycopg2-binary
 psycopg2==2.9.3
@@ -14,5 +16,5 @@ python-multipart
 sqlmodel
 requests
 typer[all]
-mastdon.py
+mastodon.py
 nicegui
