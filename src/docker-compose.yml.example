@@ -16,6 +16,8 @@ services:
       # - ./app:/code/app
       - ./data:/data
       - ./config.yml:/code/app/config.yml
+      - ./migrations:/code/migrations
+      - ./alembic.ini:/code/alembic.ini
 
   db:
     image: postgres
