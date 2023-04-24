@@ -134,6 +134,8 @@ def create_boost(db: Session, item: BoostCreate) -> Boost:
 
     federated_note_data = get_federated_note(item["note_id"])
     item["content"] = federated_note_data.get("content", "")
+    item["original_poster"] =  get_handle_from_url_or_create(db, federated_note_data.get("attributedTo", None))
+    item["original_time"] =  federated_note_data.get("published", None)
     item["source"] = federated_note_data.get("source", "")
     item["summary"] = federated_note_data.get("summary", "")
     item["attachment"] = federated_note_data.get("attachment", [])
@@ -148,6 +150,7 @@ def create_boost(db: Session, item: BoostCreate) -> Boost:
 
 
 def add_actor(db: Session, item: ActorCreateRemove) -> Actor:
+    item["name"] = item["name"].lower()
     db_item = Actor(**item)
     db.add(db_item)
     db.commit()
@@ -172,12 +175,16 @@ def get_actor_or_create(db: Session, actor_handle: str) -> Actor:
     :return: A db actor
     
     """
+    actor_handle = actor_handle.lower()
     # Get actor if exists
     actor = db.exec(select(Actor).where(Actor.name == actor_handle)).first()
 
     if actor is None:
+        profile = get_profile(get_actor_url(actor_handle))
+        profile_picture = profile.get("icon", {}).get("url", None)
         actor_entry = {
             "name": actor_handle,
+            "profile_picture": profile_picture,
         }
         actor = add_actor(db=db, item=actor_entry)
     return actor
@@ -405,3 +412,13 @@ def update_oauth_code(db: Session, state: str, code: str) -> Optional[Actor]:
 def get_settings_secret(db):
     secret = db.exec(select(Setting).where(Setting.name == "login_secret")).first()
     return secret.text_setting
+
+def get_groups_of_member(db, actor) -> List[Group]:
+    actor = get_actor_or_create(db, actor_handle)
+    groups_of_actor = db.exec(select(Members, Group).where(Members.member_id == actor.id))
+    return [member["Group"] for member in groups_of_actor]
+
+def get_posts_for_member(db, actor_handle) -> List[Boost]:
+    actor = get_actor_or_create(db, actor_handle)
+    bossts_of_actor = db.exec(select(Members, Group, Boost).where(Members.member_id == actor.id))
+    return [boost["Boost"] for boost in bossts_of_actor]

@@ -108,6 +108,7 @@ class Actor(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("name"),)
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)
+    profile_picture: str = Field()
 
     # based of this comment: https://github.com/tiangolo/sqlmodel/issues/10#issuecomment-1020647477
     notes: List["Note"] = Relationship(back_populates="actor",
@@ -167,6 +168,9 @@ class Boost(SQLModel, table=True):
     
     attributed_id: int = Field(default=None, foreign_key="actors.id")
     attributed: Optional[Actor] = Relationship(sa_relationship_kwargs={"primaryjoin": "Boost.attributed_id==Actor.id"})
+
+    original_poster_id: Optional[int] = Field(default=None, foreign_key="actors.id")
+    original_poster: Optional[Actor] = Relationship(sa_relationship_kwargs={"primaryjoin": "Boost.original_poster_id==Actor.id"})
     
     # to: List["Actor"] = Relationship(back_populates="note_to")
     # cc: List["Actor"] = Relationship(back_populates="note_cc")
@@ -174,6 +178,7 @@ class Boost(SQLModel, table=True):
     content: str = Field()
     note_id: str = Field() # What we are boosting
     source: Dict = Field(default=[], sa_column=Column(JSON))
+    original_time: datetime = Field(nullable=False)
     summary: Optional[str] = None
     # # I think this is used in OStatus stuff: https://socialhub.activitypub.rocks/t/context-vs-conversation/578/7
     # # conversation: str = Field()
@@ -247,7 +252,7 @@ engine = sqlalchemy.create_engine(
     DATABASE_URL, 
     # echo=True
 )
-SQLModel.metadata.create_all(engine)
+# SQLModel.metadata.create_all(engine)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, class_=Session)
 
@@ -267,9 +272,6 @@ def init_db(SessionLocal):
         db.add(db_item)
         db.commit()
         db.refresh(db_item)
-
-
-init_db(SessionLocal)
 
 # Dependency
 def get_db():
