@@ -14,7 +14,7 @@ Code contribution would be appreciated!
 ## Requirements
 1. You need [nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) set up, or adapt to another reverse proxy.
 2. a domain
-3. docker and docker-compose
+3. docker and docker-compose (or docker-compose)
 
 ## How to set up
 1. 
@@ -28,7 +28,16 @@ cp src/config.yml.example src/config.yml
 
 3. update the values in ``docker-compose.yml`` and ``config.yml``
 ```
-sudo docker-compose up -d
+sudo docker compose up -d
+```
+4. Run database migrations
+```
+sudo docker compose exec fedigroup alembic upgrade head
+```
+5. restart docker
+```
+sudo docker compose stop
+sudo docker compose start
 ```
 
 enjoy
