@@ -17,6 +17,8 @@ from app.common import SERVER_URL, datetime_str
 from app.get_federated_data import get_profile, actor_to_address_format, get_actor_url, get_federated_note
 from app.mastodonapi import register_oauth_application, generate_oauth_state
 
+MAX_RECURSION_DEPTH = 10
+
 # CRUD comes from: Create, Read, Update, and Delete.
 
 
@@ -126,12 +128,12 @@ def create_federated_note(db: Session, item: NoteCreate) -> Note:
 
 
 def get_note_from_url_or_create(db: Session, note_federated_id: str, depth=0) -> Boost:
-    if note_federated_id is None:
+    if note_federated_id is None or depth > MAX_RECURSION_DEPTH:
         return
     federated_note_data = get_boost_by_note_id(db, note_federated_id)
     if federated_note_data is not None:
         return federated_note_data
-    return create_boost(note_federated_id, depth)
+    return create_boost(note_federated_id, depth + 1)
 
 def create_boost(db: Session, item: BoostCreate, depth=0) -> Boost:
     item["created_at"] = datetime.utcnow()
