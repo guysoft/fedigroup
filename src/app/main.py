@@ -455,8 +455,7 @@ def mastodon_node_info():
 
 async def send_follow_accept(inbox, accept_activity, preshared_key_id):
     response = send_signed(inbox, accept_activity, get_default_gpg_private_key_path(), preshared_key_id)
-    print("Git accept follow request:")
-    print(response)
+    print(f"Got accept follow request: {response}")
 
 
 
