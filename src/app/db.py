@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlmodel import Field, ARRAY, Relationship, SQLModel, select, String
 from sqlalchemy import UniqueConstraint
 from app.common import get_config
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, backref
 from sqlmodel import Session
 from sqlalchemy import Column, Integer, Enum
 from typing import Dict, List, Optional
@@ -177,6 +177,15 @@ class Boost(SQLModel, table=True):
 
     content: str = Field()
     note_id: str = Field() # What we are boosting
+    
+    in_reply_to_id: Optional[int] = Field(default=None, foreign_key="boosts.id")
+    replies: List["Boost"] = Relationship(
+        sa_relationship_kwargs=dict(
+            cascade="all",
+            backref=backref("in_reply_to", remote_side="Boost.id"),
+        )
+    )
+    
     source: Dict = Field(default=[], sa_column=Column(JSON))
     original_time: datetime = Field(nullable=False)
     summary: Optional[str] = None

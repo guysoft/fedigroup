@@ -124,7 +124,16 @@ def create_federated_note(db: Session, item: NoteCreate) -> Note:
     db.refresh(db_note_item)
     return db_note_item
 
-def create_boost(db: Session, item: BoostCreate) -> Boost:
+
+def get_note_from_url_or_create(db: Session, note_federated_id: str, depth=0) -> Boost:
+    if note_federated_id is None:
+        return
+    federated_note_data = get_boost_by_note_id(db, note_federated_id)
+    if federated_note_data is not None:
+        return federated_note_data
+    return create_boost(note_federated_id, depth)
+
+def create_boost(db: Session, item: BoostCreate, depth=0) -> Boost:
     item["created_at"] = datetime.utcnow()
 
     cc = create_boost_recipients_list(db, item["cc"], RecipientType.cc)
@@ -135,6 +144,10 @@ def create_boost(db: Session, item: BoostCreate) -> Boost:
     federated_note_data = get_federated_note(item["note_id"])
     item["content"] = federated_note_data.get("content", "")
     item["original_poster"] =  get_handle_from_url_or_create(db, federated_note_data.get("attributedTo", None))
+    in_reply_to = get_note_from_url_or_create(db, federated_note_data.get("inReplyTo", None), depth)
+    item["in_reply_to_id"] = None
+    if in_reply_to is not None:
+        item["in_reply_to_id"] =  in_reply_to.id
     item["original_time"] =  federated_note_data.get("published", None)
     item["source"] = federated_note_data.get("source", "")
     item["summary"] = federated_note_data.get("summary", "")
@@ -231,6 +244,7 @@ def member_in_group(db: Session, group_name: str, actor: Actor) -> bool:
 
 def remove_member_grom_group(db: Session, item: MemberCreateRemove) -> Optional[Members]:
     # Get actor if exists
+    item["member"] = item["member"].lower()
     actor = db.exec(select(Actor).where(Actor.name == item["member"])).first()
 
     if actor is None:
