@@ -179,7 +179,7 @@ class Boost(SQLModel, table=True):
     note_id: str = Field() # What we are boosting
     
     in_reply_to_id: Optional[int] = Field(default=None, foreign_key="boosts.id")
-    replies: List["Boost"] = Relationship(
+    comments: List["Boost"] = Relationship(
         sa_relationship_kwargs=dict(
             cascade="all",
             backref=backref("in_reply_to", remote_side="Boost.id"),
