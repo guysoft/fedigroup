@@ -438,3 +438,8 @@ def get_posts_for_member(db, actor_handle) -> List[Boost]:
     actor = get_actor_or_create(db, actor_handle)
     bossts_of_actor = db.exec(select(Members, Group, Boost).where(Members.member_id == actor.id).where(Boost.in_reply_to == None))
     return [boost["Boost"] for boost in bossts_of_actor]
+
+def get_posts_public(db, actor_handle) -> List[Boost]:
+    actor = get_actor_or_create(db, actor_handle)
+    bossts_of_actor = db.exec(select(Group, Boost).where(Boost.in_reply_to == None))
+    return [boost["Boost"] for boost in bossts_of_actor]

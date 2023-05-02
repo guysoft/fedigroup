@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Header, Response, Form, Depends, BackgroundTasks, HTTPException
 from app.db import get_db
 from sqlmodel import Session
-from app.crud import update_oauth_code, get_posts_for_member
+from app.crud import update_oauth_code, get_posts_for_member, get_posts_public
 from app.mastodonapi import confirm_actor_valid
 import asyncio
 from app.common import get_config
@@ -185,6 +185,12 @@ def init(app: FastAPI) -> None:
 
             with ui.tab_panel("Home").style('border-radius: 50%; height: 800px; width: 640px;'):
                 for post_db in get_posts_for_member(db, await get_username(ui)):
+                    comments = []
+                    comments_tree = get_comments_tree(post_db)
+                    post_card(ui, comments_tree, COLOR_THEME_LIGHT)
+
+            with ui.tab_panel("All").style('border-radius: 50%; height: 800px; width: 640px;'):
+                for post_db in get_posts_public(db, await get_username(ui)):
                     comments = []
                     comments_tree = get_comments_tree(post_db)
                     post_card(ui, comments_tree, COLOR_THEME_LIGHT)
