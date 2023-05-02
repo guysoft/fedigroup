@@ -6,7 +6,7 @@ from app.mastodonapi import confirm_actor_valid
 import asyncio
 from app.common import get_config
 from nicegui import Client, ui
-from typing import Dict
+from typing import Dict, Any
 
 config = get_config()
 SERVER_DOMAIN = config["main"]["server_url"]
@@ -20,6 +20,36 @@ COLOR_THEME_LIGHT = {
     "color_box": "white"
 }
 
+def get_comments_tree(comments) -> Dict[str, Any]:
+    """Build a dict tree of a post and its comments
+
+    Args:
+        comments (Boost): A boost class
+
+    Returns:
+        Dict[str, Any]: A dict containging the data for the node and its children with the same data
+    """
+    comment_root = {"comments": []}
+    stack = [(comments, comment_root)]
+
+    while len(stack) > 0:
+        node, comment_dict = stack.pop()
+
+        comment_dict["data"] = {
+            "profile_src": node.original_poster.profile_picture,
+            "profile_name": node.original_poster.name,
+            "post": node.content,
+            "created_at": node.original_time.strftime("%m/%d/%Y, %H:%M:%S"),
+        }
+        comment_dict["comments"] = []
+
+        for child in node.comments:
+            child_dict = {}
+            stack.append((child, child_dict))
+            comment_dict["comments"].append(child_dict)
+    return comment_root
+
+
 def switch_tab(msg: Dict) -> None:
     #TODO FIX SCOPE
     name = msg['args']
@@ -27,16 +57,18 @@ def switch_tab(msg: Dict) -> None:
     # panels.props(f'model-value={name}')
 
 
-def avatar(src, style=""):
-    ui.image(src).style('border-radius: 50%; height: 32px; width: 32px;' + style)
+def avatar(src, style="", size=32):
+    ui.image(src).style(f'border-radius: 50%; height: {size}px; width: {size}px;' + style)
 def div(ui):
     return ui.element('div')
 
-def post_card(ui, post_dict, color_theme):
+def post_card(ui, post_tree, color_theme):
+    post_dict = post_tree["data"]
     profile_src = post_dict["profile_src"]
     profile_name = post_dict["profile_name"]
     created_at = post_dict["created_at"]
     post = post_dict["post"]
+    comments = post_tree["comments"]
     
 
     time_text = color_theme["time_text"]
@@ -44,7 +76,6 @@ def post_card(ui, post_dict, color_theme):
     post_color = color_theme["post_color"]
     color_border = color_theme["color_border"]
     color_box = color_theme["color_box"]
-    # boost="Boost!"
 
     with ui.element('div').style(f'background-color: {color_box}; border: 1px solid {color_border}; box-shadow: '
                         f'none; color: {icon_color}; padding: 32px; border-radius: 8px;'):
@@ -68,16 +99,24 @@ def post_card(ui, post_dict, color_theme):
         with ui.row().classes('w-full mt-8 mb-8'):
             div(ui).classes('w-full h-px').style(f'background-color: {color_border}')
 
-        # # retweet profiles
-        # with ui.row().classes('flex justify-between items-center w-full'):
-        #     with div(ui):
-        #         avatar(src='images/cat1.png', style='z-index: 3;')
-        #         avatar(src='images/cat2.png', style='margin-left: -16px; z-index: 2;')
-        #         avatar(src='images/cat3.png', style='margin-left: -16px; z-index: 1;')
-        #         avatar(src='images/cat4.png', style='margin-left: -16px; z-index: 0;')
+            stack = []
+            with ui.expansion('Comments').classes('text-xs font-light') as expansion:
+                for comment in comments:
+                    stack.append((comment, 0, expansion))
+                while len(stack) >  0:
+                    node, level, expansion = stack.pop()
+                    with ui.row().classes('w-full'):
+                        with expansion:
+                            padding = level*10
 
-            with div(ui):
-                ui.label("Comments").classes('text-xs font-light')
+                            with ui.row().classes('flex items-center').style(f'padding-left: {padding}px; padding-bottom: 3px;'): # f"border: 1px solid #4CAF50;"):
+                                avatar(node["data"]["profile_src"], "", 16)
+                                ui.label(node["data"]["profile_name"]).classes(f'{post_color}')
+                                ui.html(f'{node["data"]["post"]}')
+                            expansion_child = div(ui)#  ui.expansion('More').classes('text-xs font-light')
+                            for comment in node["comments"]:
+                                stack.append((comment, level + 1, expansion_child))
+                    
 
         # # retweet
         # with ui.row().classes('flex items-center mt-6'):
@@ -138,31 +177,21 @@ def init(app: FastAPI) -> None:
 
         with ui.left_drawer().classes('bg-blue-100') as left_drawer:
             ui.label(f'Login: {await get_username(ui)}')
+            
         # start closed
         # left_drawer.toggle()
-        color_profile = {
 
-        }
         with ui.tab_panels(tabs, value='Home'):
 
             with ui.tab_panel("Home").style('border-radius: 50%; height: 800px; width: 640px;'):
                 for post_db in get_posts_for_member(db, await get_username(ui)):
-                    post = {
-                        "profile_src": post_db.original_poster.profile_picture,
-                        "profile_name": post_db.original_poster.name,
-                        "post": post_db.content,
-                        "created_at": post_db.original_time.strftime("%m/%d/%Y, %H:%M:%S"),
-                    }
-
-                    post_card(ui, post, COLOR_THEME_LIGHT)
-                    
-                # post_card(ui, profile_src=SERVER_URL + "/static/default_group_icon.png", profile_name="Cat")
+                    comments = []
+                    comments_tree = get_comments_tree(post_db)
+                    post_card(ui, comments_tree, COLOR_THEME_LIGHT)
                 
             with ui.tab_panel('About'):
                 ui.label('This is the second tab')
 
-        # with ui.page_sticky(position='bottom-right', x_offset=20, y_offset=20):
-        #     ui.button(on_click=footer.toggle).props('fab icon=contact_support')
 
 
         # the page content consists of multiple tab panels
