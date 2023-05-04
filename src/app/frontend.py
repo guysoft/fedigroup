@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Header, Response, Form, Depends, BackgroundTasks, HTTPException
 from app.db import get_db
 from sqlmodel import Session
-from app.crud import update_oauth_code, get_posts_for_member, get_posts_public
+from app.crud import update_oauth_code, get_posts_for_member, get_posts_public, get_actor_or_create
 from app.mastodonapi import confirm_actor_valid
 import asyncio
 from app.common import get_config
@@ -37,6 +37,7 @@ def get_comments_tree(comments) -> Dict[str, Any]:
 
         comment_dict["data"] = {
             "profile_src": node.original_poster.profile_picture,
+            "id": node.note_id,
             "profile_name": node.original_poster.name,
             "post": node.content,
             "created_at": node.original_time.strftime("%m/%d/%Y, %H:%M:%S"),
@@ -48,6 +49,10 @@ def get_comments_tree(comments) -> Dict[str, Any]:
             stack.append((child, child_dict))
             comment_dict["comments"].append(child_dict)
     return comment_root
+
+def get_avatar(db, actor_handle):
+    actor = get_actor_or_create(db, actor_handle)
+    return actor.profile_picture
 
 
 def switch_tab(msg: Dict) -> None:
@@ -68,6 +73,7 @@ def post_card(ui, post_tree, color_theme):
     profile_name = post_dict["profile_name"]
     created_at = post_dict["created_at"]
     post = post_dict["post"]
+    post_id = post_dict["id"]
     comments = post_tree["comments"]
     
 
@@ -76,6 +82,11 @@ def post_card(ui, post_tree, color_theme):
     post_color = color_theme["post_color"]
     color_border = color_theme["color_border"]
     color_box = color_theme["color_box"]
+    def set_hightlight(element):
+        element.style(f'color: #9CBEDE;')
+
+    def set_back(element):
+        element.style(f'color: {icon_color};')
 
     with ui.element('div').style(f'background-color: {color_box}; border: 1px solid {color_border}; box-shadow: '
                         f'none; color: {icon_color}; padding: 32px; border-radius: 8px;'):
@@ -91,9 +102,13 @@ def post_card(ui, post_tree, color_theme):
         # date, share, like
         with ui.row().classes('flex justify-between items-center w-full mt-4'):
             ui.label(created_at).classes('text-xs font-light').style(f'color: {time_text};')
+
+            def like_post(post_id):
+                print(post_id)
+                
             with div(ui):
-                ui.icon('share').classes('mr-4 text-sm')
-                ui.icon('thumb_up').classes('text-sm')
+                share = ui.icon('share').classes('mr-4 text-sm').on("mouseover", lambda:  set_hightlight(share)).on("mouseout", lambda: set_back(share))
+                tumbs_up = ui.icon('thumb_up').classes('text-sm').on("mouseover", lambda:  set_hightlight(tumbs_up)).on("mouseout", lambda: set_back(tumbs_up)).on("click", lambda: like_post(post_id))
 
         # divider
         with ui.row().classes('w-full mt-8 mb-8'):
@@ -146,8 +161,31 @@ async def get_username(ui):
         )
     return username_data.get("username")
 
-def is_authenticated(ui) -> bool:
-    return get_username(ui) is not None
+async def send_logout(ui):
+    logout_data = await ui.run_javascript(
+        f"""
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.open("GET", "/logout", false);
+        xmlhttp.send();
+        (JSON.parse(xmlhttp.responseText));
+        """
+        )
+    return logout_data
+
+async def send_refresh(ui):
+    logout_data = await ui.run_javascript(
+        f"""
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.open("GET", "/refresh", false);
+        xmlhttp.send();
+        (JSON.parse(xmlhttp.responseText));
+        """
+        )
+    return logout_data
+
+async def is_authenticated(ui) -> bool:
+    username = await get_username(ui)
+    return username is not None
 
 def init(app: FastAPI) -> None:
     @ui.page('/')
@@ -161,6 +199,9 @@ def init(app: FastAPI) -> None:
             await client.connected()
         await asyncio.sleep(2)
         
+        
+
+
 
         # username = await ui.run_javascript('Date()')
         
@@ -176,24 +217,42 @@ def init(app: FastAPI) -> None:
         #     ui.label('Footer')
 
         with ui.left_drawer().classes('bg-blue-100') as left_drawer:
-            ui.label(f'Login: {await get_username(ui)}')
+            # ui.label()
             
-        # start closed
-        # left_drawer.toggle()
+            with ui.expansion().classes('text-xs font-light') as expansion:
+                with expansion.add_slot('header'):
+                    if await is_authenticated(ui):
+                        username = await get_username(ui)
+                        avatar_url = get_avatar(db, username)
+                        avatar(avatar_url, "", 16)
+                        ui.label(f'{username}').style("padding-left: 5px")
+                    
+                ui.link('Logout', "/ui_logout")
+            
+        # start closed if logged out
+        if not await is_authenticated(ui):
+            left_drawer.toggle()
 
         with ui.tab_panels(tabs, value='Home'):
+            if await is_authenticated(ui):
+                with ui.tab_panel("Home").style('border-radius: 50%; height: 800px; width: 640px;'):
+                    for post_db in get_posts_for_member(db, await get_username(ui)):
+                        comments = []
+                        comments_tree = get_comments_tree(post_db)
+                        post_card(ui, comments_tree, COLOR_THEME_LIGHT)
 
-            with ui.tab_panel("Home").style('border-radius: 50%; height: 800px; width: 640px;'):
-                for post_db in get_posts_for_member(db, await get_username(ui)):
-                    comments = []
-                    comments_tree = get_comments_tree(post_db)
-                    post_card(ui, comments_tree, COLOR_THEME_LIGHT)
+                with ui.tab_panel("All").style('border-radius: 50%; height: 800px; width: 640px;'):
+                    for post_db in get_posts_public(db, await get_username(ui)):
+                        comments = []
+                        comments_tree = get_comments_tree(post_db)
+                        post_card(ui, comments_tree, COLOR_THEME_LIGHT)
+            else:
+                with ui.tab_panel("Home").style('border-radius: 50%; height: 800px; width: 640px;'):
+                    ui.link('Click to login', "/ui_login").style('color: #6E93D6; font-size: 200%; font-weight: 300')
 
-            with ui.tab_panel("All").style('border-radius: 50%; height: 800px; width: 640px;'):
-                for post_db in get_posts_public(db, await get_username(ui)):
-                    comments = []
-                    comments_tree = get_comments_tree(post_db)
-                    post_card(ui, comments_tree, COLOR_THEME_LIGHT)
+                with ui.tab_panel("All").style('border-radius: 50%; height: 800px; width: 640px;'):
+                    ui.link('Click to login', "/ui_login").style('color: #6E93D6; font-size: 200%; font-weight: 300')
+
                 
             with ui.tab_panel('About'):
                 ui.label('This is the second tab')
@@ -235,7 +294,7 @@ def init(app: FastAPI) -> None:
             """,
                 respond=False,
             )
-        ui.label('Logged in, prepare for redirect')  
+        ui.label('Logged in, prepare for redirect')
         
 
     @ui.page('/ui_login')
@@ -273,5 +332,23 @@ def init(app: FastAPI) -> None:
             username = ui.input('Username').on('keydown.enter', try_login)
             ui.button('Log in', on_click=try_login)
             ui.label(ui.open('/protected'))
+
+
+    @ui.page('/ui_logout')
+    async def logout_page(request: Request, client: Client) -> None :
+        # Wait for page to load
+        await asyncio.sleep(2)
+        await client.connected()
+        await asyncio.sleep(2)
+        refresh_data = await send_refresh(ui)
+        await asyncio.sleep(2)
+        logout_data = await send_logout(ui)
+        await ui.run_javascript(
+            f"""
+            window.location.replace("/");
+            """,
+                respond=False,
+        )
+        ui.label('Logged out, prepare for redirect back to main page')
 
     ui.run_with(app, title="Fedigroup", favicon="app/static/default_group_icon.png")
