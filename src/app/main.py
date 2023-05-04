@@ -825,6 +825,7 @@ def login(user: User, Authorize: AuthJWT = Depends()):
     Authorize.set_refresh_cookies(refresh_token)
     return {"msg":"Successfully login"}
 
+@app.get('/refresh')
 @app.post('/refresh')
 def refresh(Authorize: AuthJWT = Depends()):
     Authorize.jwt_refresh_token_required()
@@ -849,19 +850,12 @@ def logout(request: Request,Authorize: AuthJWT = Depends()):
     log the user out by simply deleting the cookie in the frontend.
     We need the backend to send us a response to delete the cookies.
     """
-    Authorize.jwt_required()
+    Authorize.jwt_optional()
 
     Authorize.unset_jwt_cookies()
 
     return {"msg":"Successfully logout"}
-    page_data = {
-        "request": request,
-        "data": {
-            "logged_in": False,
-            "username": None
-        }
-    }
-    return templates.TemplateResponse("index.html", page_data)
+
 
 @app.get('/protected')
 def protected(Authorize: AuthJWT = Depends()):
