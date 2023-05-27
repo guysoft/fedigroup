@@ -10,11 +10,11 @@ from app.make_ssh_key import generate_keys
 
 from app.crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, \
 get_members_list, get_note, get_groups, create_federated_note, get_boost_by_note_id, get_domain_app_id_or_create, \
-add_initial_oauth_code, update_oauth_code, get_settings_secret
+add_initial_oauth_code, update_oauth_code, get_settings_secret, get_actor_or_create
 
 from app.db import Group, Members, SessionLocal, database
 from app.common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str, \
-is_local_actor, get_handle_name
+is_local_actor, get_handle_name, init_fs, is_valid_group_name
 
 from app.schemas import GroupCreateForm, OauthLogin
 from app.send_group import save_message_and_boost
@@ -40,15 +40,19 @@ from app.db import get_db
 
 config = get_config()
 SERVER_DOMAIN = config["main"]["server_url"]
+UPLOAD_FOLDER = config["main"]["upload_folder"]
 SERVER_URL = "https://" + SERVER_DOMAIN
+DEFAULT_ICON = f"{SERVER_URL}/static/default_group_icon.png"
 
 from app.db import SessionLocal, init_db
 init_db(SessionLocal)
+init_fs()
 
 app = FastAPI()
 
 templates = Jinja2Templates(directory=os.path.join(DIR, "templates"))
 app.mount("/static", StaticFiles(directory=os.path.join(DIR, "static")), name="static")
+app.mount("/uploads", StaticFiles(directory=UPLOAD_FOLDER), name="static")
 
 @app.on_event("startup")
 async def startup():
@@ -92,18 +96,31 @@ async def root(request: Request, db: Session = Depends(get_db), Authorize: AuthJ
     }
     return templates.TemplateResponse("index.html", page_data)
 
-@app.get("/create_group", response_class=HTMLResponse)
-async def create_group_route(request: Request, Authorize: AuthJWT = Depends()):
-    Authorize.jwt_required()
-    return templates.TemplateResponse("create_group.html", {"request": request, "data": {}})
+@app.post("/create_group_post")
+async def create_group_post(request: Request, group_name: str, display_name: str, description: str, creator_handle: str, profile_picture: str= "default", cover_photo: str = "default", db: Session = Depends(get_db)):
+    item = {}
+    if not is_valid_group_name(group_name):
+        return {"message": "Group name is invalid", "success": False}
+     
+    actor = get_actor_or_create(db, creator_handle)
 
-
-@app.post("/create_group_submit")
-async def create_group_submit(request: Request, form: GroupCreateForm = Depends(GroupCreateForm.as_form), db: Session = Depends(get_db)):
-    db_group = get_group_by_name(db, name=form.name)
+    item["name"] = group_name
+    item["display_name"] = display_name
+    item["description"] = description
+    item["profile_picture"] = profile_picture
+    item["cover_photo"] = cover_photo
+    item["creator_id"] = actor.id
+    item["discoverable"] = True
+    
+    db_group = get_group_by_name(db, name=group_name)
     if db_group is not None:
-        return { "message": "Error: group " + form.name + " already exists", "success": False}
-    return create_group(db=db, item=form.dict())
+        return {"message": f"Error: group {name} already exists", "success": False}
+    
+    try:
+        new_group_db = create_group(db=db, item=item)
+        return {"success": True, "id": f"{new_group_db.name}"}
+    except Exception as e:
+        return {"success": False, "message": f"{e}"}
 
 @app.get("/ostatus_subscribe?acct={id}")
 async def subscribe(request: Request, id: str):
@@ -155,14 +172,14 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
     following = SERVER_URL + "/group/" + id + "/following"
     followers = SERVER_URL + "/group/" + id + "/followers"
     inbox = SERVER_URL + "/group/" + id + "/inbox"
-    outbox = "AA"
+    outbox = "None"
     featured = SERVER_URL + "/group/" + id + "/featured"
     # Note preferredUsername has to be the same as name
-    preferredUsername = id # db_group.preferredUsername
+    preferredUsername = db_group.display_name
     manuallyApprovesFollowers = False
     discoverable = db_group.discoverable
     name = db_group.name
-    summary = db_group.summary
+    summary = db_group.description
     
     url = SERVER_URL + "/group/" + id
     publicKey = {"id": SERVER_URL + "/group/" + id + "#main-key","owner": SERVER_URL + "/" + id,"publicKeyPem": get_default_gpg()}
@@ -170,13 +187,13 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
     attachment = []
     endpoints = {"oauthAuthorizationEndpoint":SERVER_URL + "/oauth/authorize","oauthRegistrationEndpoint": SERVER_URL + "/api/v1/apps","oauthTokenEndpoint": SERVER_URL + "/oauth/token","sharedInbox": SERVER_URL + "/inbox","uploadMedia": SERVER_URL +"/api/ap/upload_media"}
 
-    icon = {"type":"Image","url": SERVER_URL + "/static/" + db_group.icon}
-    if db_group.icon == "default":
-        icon = {"type":"Image","url": SERVER_URL + "/static/default_group_icon.png"}
+    icon = {"type": "Image","url": f"{SERVER_URL}{db_group.profile_picture}"}
+    if db_group.profile_picture == "default":
+        icon = {"type": "Image","url": DEFAULT_ICON}
 
-    image = {"type":"Image","url": SERVER_URL + "/static/" + db_group.image}
-    if db_group.image == "default":
-        image = {"type":"Image","url": SERVER_URL + "/static/default_group_icon.png"}
+    image = {"type": "Image","url": f"{SERVER_URL}{db_group.cover_photo}"}
+    if db_group.cover_photo == "default":
+        image = {"type": "Image","url": DEFAULT_ICON}
 
     return_value = {
         "@context": context,
@@ -211,18 +228,19 @@ async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
     if "json" in accept:
         return response
 
-    data = """
+    data = f'''
     <html>
         <head>
             <title>Some HTML in here</title>
         </head>
         <body>
-            <h1>Group Name: """ + id + """</h1></br>
-            <h2>""" + summary + """</h1></br>
-            <img src=""" + image["url"] + """ /> </h1></br>
+            <h1>Group Name: {id}</h1></br>
+            <h2>{summary}</h1></br>
+            <img src={icon["url"]} /> </h1></br>
+            <img src={image["url"]} /> </h1></br>
         </body>
     </html>
-    """
+    '''
     response = Response(content=str(data), media_type="html")
     return response
 

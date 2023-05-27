@@ -1,4 +1,5 @@
 import os
+import re
 import yaml
 import inspect
 from typing import Type, Tuple
@@ -30,6 +31,7 @@ def get_config():
 config = get_config()
 SERVER_DOMAIN = config["main"]["server_url"]
 SERVER_URL = "https://" + SERVER_DOMAIN
+UPLOAD_FOLDER = config["main"]["upload_folder"]
 
 def as_form(cls: Type[BaseModel]):
     new_parameters = []
@@ -106,3 +108,15 @@ def get_server_keys(group: str) -> Tuple[str, str]:
     preshared_key_id = multi_urljoin(SERVER_URL, "group", group) + "#main-key"
     key_path = "/data/default_gpg_key/id_rsa"
     return preshared_key_id, key_path
+
+
+def init_fs():
+    ensure_dir(UPLOAD_FOLDER)
+    return
+
+def is_valid_group_name(group_name) -> bool:
+    """
+    Returns True if the given string is a valid Mastodon group_name, and False otherwise.
+    """
+    regex = re.compile(r'^[a-zA-Z0-9_]*$')
+    return bool(regex.search(group_name))

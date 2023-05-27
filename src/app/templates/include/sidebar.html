@@ -11,9 +11,6 @@
     <ul class="list-unstyled components">
         {% if data["logged_in"] %}
         <li class="active">
-            <a href="/create_group">Create Group</a>
-        </li>
-        <li class="active">
             {{data["username"]}} <a href="/logout">Logout</a>
         </li>
         {% else %}

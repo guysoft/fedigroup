@@ -18,3 +18,4 @@ requests
 typer[all]
 mastodon.py
 nicegui
+Pillow

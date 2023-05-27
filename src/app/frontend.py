@@ -4,12 +4,20 @@ from sqlmodel import Session
 from app.crud import update_oauth_code, get_posts_for_member, get_posts_public, get_actor_or_create
 from app.mastodonapi import confirm_actor_valid
 import asyncio
-from app.common import get_config
+from app.common import get_config, is_valid_group_name
 from nicegui import Client, ui
 from typing import Dict, Any
+from PIL import Image
+import hashlib
+import io
+import os
+import json
+import copy
+
 
 config = get_config()
 SERVER_DOMAIN = config["main"]["server_url"]
+UPLOAD_FOLDER = config["main"]["upload_folder"]
 SERVER_URL = "https://" + SERVER_DOMAIN
 
 COLOR_THEME_LIGHT = {
@@ -64,8 +72,52 @@ def switch_tab(msg: Dict) -> None:
 
 def avatar(src, style="", size=32):
     ui.image(src).style(f'border-radius: 50%; height: {size}px; width: {size}px;' + style)
+
 def div(ui):
     return ui.element('div')
+
+def resize_image_profile(data, width, height):
+    image_file = io.BytesIO(data)
+
+    with Image.open(image_file) as image:
+        origin_width, origin_height = image.size
+        origin_format = image.format
+
+        new_width, new_height = origin_width, origin_height
+        # Resize image
+        if origin_width > width or origin_height > height:
+            if width > height:
+                left = (width - height) / 2
+                upper = 0
+                right = (width + height) / 2
+                lower = height
+            else:
+                left = 0
+                upper = (height - width) / 2
+                right = width
+                lower = (height + width) / 2
+            image = image.crop((left, upper, right, lower))
+            image = image.resize((width, height))
+
+            new_width, new_height = image.size
+            image_file.seek(0)
+
+
+        # Save image
+        readable_hash = hashlib.sha256(data).hexdigest()
+        save_format = "jpg"
+        if origin_format == "PNG":
+            save_format = "png"
+        elif origin_format == "GIF":
+            save_format = "gif"
+        saved_name = f"{readable_hash}_{new_width}_{new_height}.{save_format}"
+        save_url = f"/uploads/{saved_name}"
+        save_path = os.path.join(UPLOAD_FOLDER, saved_name)
+        if not os.path.isfile(save_path):
+            image.save(save_path)
+
+        return save_url
+
 
 def post_card(ui, post_tree, color_theme):
     post_dict = post_tree["data"]
@@ -141,11 +193,11 @@ def post_card(ui, post_tree, color_theme):
         # with ui.row().classes('mt-4'):
         #     ui.label(boost).classes('text-xs font-light').style(f'color: {post_color}')
 
-        with ui.row().classes('w-full mt-8'):
-            with ui.element("div").classes('flex w-full justify-center items-center rounded-full p-2').style(
-                    f'border: 1px solid {color_border}; box-shadow: none; background-color: {color_box};'):
-                ui.label("Show all").classes(f'mr-4 text-xs {post_color}')
-                # ui.icon('expand_more').classes(f'{post_color}')
+        # with ui.row().classes('w-full mt-8'):
+        #     with ui.element("div").classes('flex w-full justify-center items-center rounded-full p-2').style(
+        #             f'border: 1px solid {color_border}; box-shadow: none; background-color: {color_box};'):
+        #         ui.label("Show all").classes(f'mr-4 text-xs {post_color}')
+        #         # ui.icon('expand_more').classes(f'{post_color}')
 
 
 
@@ -199,12 +251,6 @@ def init(app: FastAPI) -> None:
             await client.connected()
         await asyncio.sleep(2)
         
-        
-
-
-
-        # username = await ui.run_javascript('Date()')
-        
         with ui.header().classes(replace='row items-center') as header:
             ui.button(on_click=lambda: left_drawer.toggle()).props('flat color=white icon=menu')
             with ui.tabs() as tabs:
@@ -226,8 +272,109 @@ def init(app: FastAPI) -> None:
                         avatar_url = get_avatar(db, username)
                         avatar(avatar_url, "", 16)
                         ui.label(f'{username}').style("padding-left: 5px")
-                    
-                ui.link('Logout', "/ui_logout")
+
+                async def submit_new_group():
+                    request_data = {
+                        "group_name": group_name.value,
+                        "display_name": display_name.value,
+                        "description": description.value,
+                        "profile_picture": profile_picture.save_url,
+                        "cover_photo": cover_photo.save_url,
+                        "creator_handle": username,
+                    }
+                    payload = json.dumps(request_data)
+
+                    response = await ui.run_javascript(
+                    f"""
+                    var data = JSON.parse('{payload}');
+                    var xmlhttp = new XMLHttpRequest();
+
+                    var params = new URLSearchParams();
+                    for (var key in data) {{
+                        if (data.hasOwnProperty(key)) {{
+                        params.append(key, data[key]);
+                        }}
+                    }}
+                    xmlhttp.open("POST", "/create_group_post?" + params.toString(), false);
+                    xmlhttp.send();
+                    var return_value = xmlhttp.responseText;
+                    try {{
+                        return_value = JSON.parse(xmlhttp.responseText);
+                    }} catch (e) {{
+                        return_value = xmlhttp.responseText;
+                    }}
+                    (xmlhttp.responseText)
+                    """,
+                        respond=True,
+                    )
+                    try:
+                        response = json.loads(response)
+                    except JSONDecodeError:
+                        pass
+                    if type(response) == dict:
+                        if response["success"]:
+                            print(f"group created: {group_name.value}")
+                            await ui.run_javascript(f'window.location.replace("/group/{group_name.value}");',respond=False)
+                            ui.notify(f'Group created, redirecting to group page')
+                        else:
+                            # Handle group creation error
+                            if "message" in response.keys():
+                                ui.notify(f'Group not created: {response["message"]}')
+                            else:
+                                ui.notify(f'Group not created: {response}')
+                    else:
+                        ui.notify(f'Response not readable data: {response}')
+
+                
+                with ui.column():
+                    with ui.row():
+                        ui.icon('logout')
+                        ui.link('Logout', "/ui_logout")
+
+                    with ui.dialog().props('persistent fullWidth fullHeight') as dialog, ui.card():
+                        with ui.element('q-toolbar-title'):
+                            with ui.row():
+                                ui.icon('group_add')
+                                ui.label('Create New Group')
+                                ui.icon('close').props("v-close-popup").classes("on-right flat round dense cursor-pointer absolute-right").on("click", dialog.close)
+
+                        with ui.column().classes('items-center'):
+                            group_name = ui.input(label="Group name", placeholder='cats',
+                            validation={
+                                'Input too short': lambda value: len(value) > 1,
+                                "only use alphanumeric letters (letters, numbers, underscores, hyphens)": is_valid_group_name
+                                }
+                            )
+                            display_name = ui.input(label="Display name", placeholder='The cute cat group',
+                            validation={'Input too short': lambda value: len(value) > 1}
+                            )
+                            description = ui.textarea(label="Description", placeholder='This group is a place to exchange picture of cats',
+                            validation={'Input too short': lambda value: len(value) > 1}
+                            )
+
+                            def handle_upload_profile(event, element, width=400, height=400):
+                                with event.content as f:
+                                    data = f.read() # read entire file as bytes
+                                    save_url = resize_image_profile(data, width, height)
+                                    
+                                    element.save_url = save_url
+                                    ui.notify(f'Uploaded {element.save_url}')
+
+
+
+                            profile_picture = ui.upload(auto_upload=True, on_upload=lambda e:  handle_upload_profile(e, profile_picture), label="Profile picture", max_files=1).props('accept=".jpg, image/*"')
+                            profile_picture.save_url = None
+                            cover_photo = ui.upload(auto_upload=True, on_upload=lambda e: handle_upload_profile(e, cover_photo, 1920, 1080), label="Cover picture", max_files=1)
+                            cover_photo.save_url = None
+                            ui.button('Create', on_click=submit_new_group)
+
+                            # with ui.row():
+                            #     ui.button('Close', on_click=dialog.close)
+                            #     ui.button('Create', on_click=submit_new_group)
+                    with ui.row():
+                        ui.icon('group_add')
+                        ui.link("Create new group").on("click", dialog.open)
+                
             
         # start closed if logged out
         if not await is_authenticated(ui):
@@ -256,13 +403,6 @@ def init(app: FastAPI) -> None:
                 
             with ui.tab_panel('About'):
                 ui.label('This is the second tab')
-
-
-
-        # the page content consists of multiple tab panels
-
-
-
 
 
     @ui.page('/oauth_login_code_frontend')

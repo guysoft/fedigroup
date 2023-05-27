@@ -39,13 +39,15 @@ class Group(SQLModel, table=True):
     __tablename__ = "groups"
     __table_args__ = (UniqueConstraint("name"),)
     id: int = Field(default=None, primary_key=True)
-    # TODO: Remove preferredUsername
-    preferredUsername: str = Field()
+    display_name: str = Field()
     name: str = Field()
-    summary: str = Field()
-    icon: str = Field()
-    image: str = Field()
+    description: str = Field()
+    profile_picture: str = Field()
+    cover_photo: str = Field()
     discoverable: bool = Field()
+
+    creator_id: int = Field(default=None, foreign_key="actors.id")
+    creator: Optional["Actor"] = Relationship(back_populates="created_groups")
 
     members: List["Members"] = Relationship(back_populates="group")
 
@@ -121,6 +123,8 @@ class Actor(SQLModel, table=True):
     boost_mentions: List[BoostRecipients] = Relationship(back_populates="actor")
 
     groups_in: List[Members] = Relationship(back_populates="member")
+    
+    created_groups: List[Group] = Relationship(back_populates="creator")
 
     codes: List["OauthCode"] = Relationship(back_populates="actor")
 

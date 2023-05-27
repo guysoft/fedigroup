@@ -29,7 +29,6 @@ def get_groups(db: Session) -> Optional[Group]:
     return db.exec(select(Group)).all()
 
 def create_group(db: Session, item: GroupCreate) -> Group:
-    # item["id"] = 7
     item["icon"] = "default"
     item["image"] = "default"
     item["discoverable"] = True
