@@ -1,13 +1,40 @@
 # Fedigroup
 
-Groups in Fediverse
+Groups in the Fediverse
 
-Trying to implement: https://github.com/yuforium/activitypub-docs
+Fegigroup lets you create a group and then mention it in the fediverse, the group would then boost your message and also store its contents for search.
+There is also a web UI that lets you search within groups you are a member of (search is currently being implemented).
+
+The server is currently in alpha stage and many critical features don't work yet. Contributions are welcome!
+
+### Features
+
+* You can login using a Mastodon-API supported account and create a group
+* You can follow that group and it will boost mentions of it to other people.
+* The group stores the message in the database
+
+### What does not work
+* Search
+* Pagination
+* Attachment save/displa
+* Posting from within the webui
+* Like/share from within the webui
+* Delete activity
+* Edit acttivity
+* Edit existing group
+* Delete / archive group
+* Moderation (delete/block/defedate)
+
+### General info
+* All groups are public
+
+## Motivation
+I was trying to implement: https://github.com/yuforium/activitypub-docs
 or: https://codeberg.org/fediverse/fep/src/branch/main/feps/fep-1b12.md
 While being functional
 
 I saw this and thought it was cool: https://github.com/wmurphyrd/guppe
-But I want to have also a way to search back in groups. For now I am aiming for public only groups.
+But I want to have also a way to search back in groups.
 
 Code contribution would be appreciated!
 
@@ -24,17 +51,16 @@ cd fedigroup
 cp src/docker-compose.yml.example src/docker-compose.yml
 cp src/config.yml.example src/config.yml
 ```
-2. 
 
-3. update the values in ``docker-compose.yml`` and ``config.yml``
+2. update the values in ``docker-compose.yml`` and ``config.yml``
 ```
 sudo docker compose up -d
 ```
-4. Run database migrations
+3. Run database migrations
 ```
 sudo docker compose exec fedigroup alembic upgrade head
 ```
-5. restart docker
+4. restart docker
 ```
 sudo docker compose stop
 sudo docker compose start
