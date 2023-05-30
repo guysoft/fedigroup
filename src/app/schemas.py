@@ -77,7 +77,7 @@ class NoteCreate(NoteBase):
     #     arbitrary_types_allowed = True
     
 class BoostCreate(BoostBase):
-    actor: int
+    group: int
     attributed_to: int
     to: List["Actor"] = Relationship(back_populates="name")
     cc: List[int]

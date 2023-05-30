@@ -631,6 +631,8 @@ async def inbox(request: Request, background_tasks: BackgroundTasks, db: Session
                 # response = await send_signed(inbox, accept_activity, get_default_gpg_private_key_path(), preshared_key_id)
                 # print(response)
                 background_tasks.add_task(send_follow_accept, inbox, accept_activity, preshared_key_id)
+            else:
+                print("Error: got none reply for add_member_to_group")
 
         elif request_type == "Accept":
             print("Got accepted!")

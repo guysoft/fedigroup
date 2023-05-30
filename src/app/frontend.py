@@ -47,6 +47,10 @@ def get_comments_tree(comments) -> Dict[str, Any]:
             "profile_src": node.original_poster.profile_picture,
             "id": node.note_id,
             "profile_name": node.original_poster.name,
+
+            "group_src": node.attributed.profile_picture,
+            "group_name": node.group.name,
+
             "post": node.content,
             "created_at": node.original_time.strftime("%m/%d/%Y, %H:%M:%S"),
         }
@@ -127,6 +131,9 @@ def post_card(ui, post_tree, color_theme):
     post = post_dict["post"]
     post_id = post_dict["id"]
     comments = post_tree["comments"]
+
+    group_src = post_dict["group_src"]
+    group_name = post_dict["group_name"]
     
 
     time_text = color_theme["time_text"]
@@ -147,6 +154,14 @@ def post_card(ui, post_tree, color_theme):
             ui.image(profile_src).classes('rounded-full h-8 w-8')
             ui.label(profile_name).classes(f'{post_color} text-base font-light')
 
+            # Group to arrow
+            to_group = ui.icon('chevron_right').classes('text-sm')
+            
+            # Group avatar
+            ui.image(group_src).classes('rounded-full h-8 w-8')
+            ui.label(group_name).classes(f'{post_color} text-base font-light')
+
+
         # post
         with ui.row().classes('mt-4'):
             ui.html(post).classes('text-base font-light').style(f'color: {post_color};')
@@ -161,6 +176,7 @@ def post_card(ui, post_tree, color_theme):
             with div(ui):
                 share = ui.icon('share').classes('mr-4 text-sm').on("mouseover", lambda:  set_hightlight(share)).on("mouseout", lambda: set_back(share))
                 tumbs_up = ui.icon('thumb_up').classes('text-sm').on("mouseover", lambda:  set_hightlight(tumbs_up)).on("mouseout", lambda: set_back(tumbs_up)).on("click", lambda: like_post(post_id))
+                
 
         # divider
         with ui.row().classes('w-full mt-8 mb-8'):

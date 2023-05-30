@@ -37,10 +37,10 @@ def fedigroup_message(db: Session, group: str, message: str, preshared_key_id, k
 def fedigroup_boost(db: Session, group: str, note_id: str, preshared_key_id, key_path) -> Dict[str, Any]:
     """Boost a message in a group"""
     now_datetime = datetime.now(timezone.utc)
-
+    
     actor = group + "@" + SERVER_DOMAIN
     boost_data_dict = {
-        "actor": get_actor_or_create(db, actor),
+        "group": get_group_by_name(db, group),
         "attributed": get_actor_or_create(db, actor),
         "created_at": now_datetime,
         "note_id": note_id,
@@ -69,11 +69,12 @@ def save_message_and_boost(db: Session, item: Dict[str, Any], groups: List[str])
     for group in groups:
         print(f"boosting test group: {group}")
         actor = group + "@" + SERVER_DOMAIN
+        group_db = get_group_by_name(db, group)
         
         if member_in_group(db, group, author_of_note):
             now_datetime = datetime.now(timezone.utc)
             boost_data_dict = {
-                "actor": get_actor_or_create(db, actor),
+                "group": group_db,
                 "attributed": get_actor_or_create(db, actor),
                 "created_at": now_datetime,
                 "note_id": note_id,
@@ -88,6 +89,8 @@ def save_message_and_boost(db: Session, item: Dict[str, Any], groups: List[str])
             activity = create_activity_to_send_from_boost(boost)
             preshared_key_id, key_path = get_server_keys(group)
             send_message(db, activity, preshared_key_id, key_path, activity["to"])
+        else:
+            print(f"Author or note {author_of_note.name} is not a member of group {group}, not boosting")
     return
 
 

@@ -218,10 +218,12 @@ def add_member_to_group(db: Session, item: MemberCreateRemove) -> Optional[Membe
     if group is None:
         print("Error, group does not exist: " + item["group"])
         return None
+    else:
+        print(f'Found group: {item["group"]}')
 
     # Check if exists:
-    member_in_group = db.exec(select(Members, Group).where(
-        Group.name == group.name).where(Members.member_id == actor.id)).first()
+    member_in_group = db.exec(select(Members).where(
+        Members.group_id == group.id).where(Members.member_id == actor.id)).first()
 
     if member_in_group is None:
         # Use id for actor and not the name
@@ -232,6 +234,8 @@ def add_member_to_group(db: Session, item: MemberCreateRemove) -> Optional[Membe
         db.commit()
         db.refresh(db_item)
         return db_item
+    else:
+        print(f"Error: member already in group: {member_in_group.id}")
     return None
 
 def member_in_group(db: Session, group_name: str, actor: Actor) -> bool:
@@ -325,7 +329,7 @@ def create_activity_to_send_from_note(db_note) -> Dict[str, Any]:
 def create_activity_to_send_from_boost(db_boost) -> Dict[str, Any]:
     to = []
     cc = []
-    actor = get_actor_url(db_boost.actor.name)
+    actor = get_actor_url(db_boost.attributed.name)
     for recipient in db_boost.recipients:
         if recipient.type == RecipientType.to:
             to.append(recipient.url)
@@ -435,10 +439,9 @@ def get_groups_of_member(db, actor) -> List[Group]:
 
 def get_posts_for_member(db, actor_handle) -> List[Boost]:
     actor = get_actor_or_create(db, actor_handle)
-    bossts_of_actor = db.exec(select(Members, Group, Boost).where(Members.member_id == actor.id).where(Boost.in_reply_to == None))
-    return [boost["Boost"] for boost in bossts_of_actor]
+    bossts_of_actor = db.exec(select(Boost).join(Group).join(Members).where(Members.member_id == actor.id).where(Boost.in_reply_to == None).order_by(Boost.created_at.desc()))
+    return bossts_of_actor
 
 def get_posts_public(db, actor_handle) -> List[Boost]:
-    actor = get_actor_or_create(db, actor_handle)
-    bossts_of_actor = db.exec(select(Group, Boost).where(Boost.in_reply_to == None))
-    return [boost["Boost"] for boost in bossts_of_actor]
+    boosts = db.exec(select(Boost).where(Boost.in_reply_to == None).order_by(Boost.created_at.desc()))
+    return boosts
