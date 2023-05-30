@@ -4,3 +4,4 @@ main:
   data_folder: /data
   upload_folder: /data/uploads
   database_url: postgresql+psycopg2://postgres:postgres@db/fedigroup
+  database_url_alembic: postgresql://postgres:postgres@db/fedigroup
