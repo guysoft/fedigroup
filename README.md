@@ -17,7 +17,7 @@ The server is currently in alpha stage and many critical features don't work yet
 ### What does not work yet
 * Search
 * Pagination
-* Attachment save/displa
+* Attachment save/display
 * Posting from within the webui
 * Like/share from within the webui
 * Delete activity
