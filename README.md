@@ -13,7 +13,7 @@ The server is currently in alpha stage and many critical features don't work yet
 * You can follow that group and it will boost mentions of it to other people.
 * The group stores the message in the database
 
-### What does not work
+### What does not work yet
 * Search
 * Pagination
 * Attachment save/displa
