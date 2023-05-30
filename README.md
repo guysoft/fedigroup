@@ -1,4 +1,5 @@
 # Fedigroup
+![image](https://github.com/guysoft/fedigroup/blob/main/media/logo.png?raw=true)
 
 Groups in the Fediverse
 
