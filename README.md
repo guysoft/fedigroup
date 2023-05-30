@@ -17,6 +17,7 @@ The server is currently in alpha stage and many critical features don't work yet
 ### What does not work yet
 * Search
 * Pagination
+* group pages
 * Attachment save/display
 * Posting from within the webui
 * Like/share from within the webui
@@ -25,6 +26,7 @@ The server is currently in alpha stage and many critical features don't work yet
 * Edit existing group
 * Delete / archive group
 * Moderation (delete/block/defedate)
+ Lots of elements not clickable (dates, avatars)
 
 ### General info
 * All groups are public
