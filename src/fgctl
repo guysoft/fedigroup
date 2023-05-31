@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo docker exec -it fedigroup python -m app.fgctl $@
+sudo docker exec -it fedigroup python -m app.fgctl "$@"
