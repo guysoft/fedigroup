@@ -3,7 +3,7 @@
     Returns:
         _type_: _description_
 """
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 import copy
 from datetime import datetime
 import uuid
@@ -104,16 +104,13 @@ def create_federated_note(db: Session, item: NoteCreate) -> Note:
 
     if "attributedTo" not in item.keys():
         return
-    
-    if "actor" not in item.keys():
-        item["actor"] = item["attributedTo"]
 
     for key in ["content", "source", "summary"]:
         if key not in item.keys():
             item[key] = ""
 
-    if type(item["actor"]) == str:
-        item["actor"] = get_handle_from_url_or_create(db, item["actor"])
+    if type(item["group"]) == str:
+        item["group"] = get_group_by_name(db, item["group"])
 
     if type(item["attributedTo"]) == str:
         item["attributed"] = get_handle_from_url_or_create(db, item["attributedTo"])
@@ -290,8 +287,7 @@ def get_note_by_object_id(db: Session, note_id: str) -> Optional[Note]:
 def get_boost_by_note_id(db: Session, note_id: str) -> Optional[Boost]:
     return db.exec(select(Boost).where(Boost.note_id == note_id)).first()
 
-
-def create_activity_to_send_from_note(db_note) -> Dict[str, Any]:
+def get_recipients_from_note(db_note: Note) -> Tuple[List[str], List[str]]:
     to = []
     cc = []
     for recipient in db_note.recipients:
@@ -299,6 +295,10 @@ def create_activity_to_send_from_note(db_note) -> Dict[str, Any]:
             to.append(recipient.url)
         elif recipient.type == RecipientType.cc:
             cc.append(recipient.url)
+    return to, cc
+
+def create_activity_to_send_from_note(db_note) -> Dict[str, Any]:
+    to, cc = get_recipients_from_note(db_note)
 
     note_url_id = SERVER_URL + "/note/" + str(db_note.id)
     create_id = note_url_id + "/" + uuid.uuid4().hex
@@ -309,7 +309,7 @@ def create_activity_to_send_from_note(db_note) -> Dict[str, Any]:
         "@context": "https://www.w3.org/ns/activitystreams",
         "type": "Create",
         "id": create_id,
-        "actor": get_actor_url(db_note.actor.name),
+        "actor": get_actor_url(db_note.attributed.name),
         "object": {
                 "id": note_url_id,
                 "type": "Note",

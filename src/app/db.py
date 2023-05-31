@@ -49,6 +49,9 @@ class Group(SQLModel, table=True):
     creator_id: int = Field(default=None, foreign_key="actors.id")
     creator: Optional["Actor"] = Relationship(back_populates="created_groups")
 
+    notes: List["Note"] = Relationship(back_populates="group",
+    sa_relationship_kwargs={"primaryjoin": "Note.group_id==Group.id"})
+
     boosts: List["Boost"] = Relationship(back_populates="group",
     sa_relationship_kwargs={"primaryjoin": "Boost.group_id==Group.id"})
 
@@ -116,8 +119,8 @@ class Actor(SQLModel, table=True):
     profile_picture: str = Field()
 
     # based of this comment: https://github.com/tiangolo/sqlmodel/issues/10#issuecomment-1020647477
-    notes: List["Note"] = Relationship(back_populates="actor",
-    sa_relationship_kwargs={"primaryjoin": "Note.actor_id==Actor.id"})
+    notes: List["Note"] = Relationship(back_populates="attributed",
+    sa_relationship_kwargs={"primaryjoin": "Note.attributed_id==Actor.id"})
     
     mentions: List[NoteRecipients] = Relationship(back_populates="actor")
     boost_mentions: List[BoostRecipients] = Relationship(back_populates="actor")
@@ -137,8 +140,8 @@ class Note(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     attachment: list = Field(default=[], sa_column=Column(JSON))
 
-    actor_id: Optional[int] = Field(default=None, foreign_key="actors.id")
-    actor: Optional[Actor] = Relationship(sa_relationship_kwargs={"primaryjoin": "Note.actor_id==Actor.id"})
+    group_id: Optional[int] = Field(default=None, foreign_key="groups.id")
+    group: Optional[Group] = Relationship(sa_relationship_kwargs={"primaryjoin": "Note.group_id==Group.id"})
     
     attributed_id: int = Field(default=None, foreign_key="actors.id")
     attributed: Optional[Actor] = Relationship(sa_relationship_kwargs={"primaryjoin": "Note.attributed_id==Actor.id"})

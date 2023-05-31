@@ -15,7 +15,7 @@ def fedigroup_message(db: Session, group: str, message: str, preshared_key_id, k
 
     actor = group + "@" + SERVER_DOMAIN
     note_data_dict = {
-        "actor": get_actor_or_create(db, actor),
+        "group": get_group_by_name(db, group),
         "attributed": get_actor_or_create(db, actor),
         "content": message,
         "source": message,

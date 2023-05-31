@@ -61,7 +61,7 @@ class OauthAppCreateRemove(OauthAppBase):
     scopes: List[str]
 
 class NoteCreate(NoteBase):
-    actor: int
+    group: int
     attributed_to: int
     to: List["Actor"] = Relationship(back_populates="name")
     cc: List[int]

@@ -10,7 +10,7 @@ from app.make_ssh_key import generate_keys
 
 from app.crud import get_group_by_name, create_group, add_member_to_group, remove_member_grom_group, \
 get_members_list, get_note, get_groups, create_federated_note, get_boost_by_note_id, get_domain_app_id_or_create, \
-add_initial_oauth_code, update_oauth_code, get_settings_secret, get_actor_or_create
+add_initial_oauth_code, update_oauth_code, get_settings_secret, get_actor_or_create, get_recipients_from_note
 
 from app.db import Group, Members, SessionLocal, database
 from app.common import get_config, DIR, as_form, get_group_path, SERVER_DOMAIN, SERVER_URL, datetime_str, \
@@ -252,15 +252,16 @@ async def note(request: Request, id: str, db: Session = Depends(get_db)):
     if db_note is None:
         return {"error": "Status not found"}
 
+    to, cc = get_recipients_from_note(db_note)
+
     context = get_context()
     # summary = db_group.summary
     
     tag = []
-    to = ["https://kitch.win/users/guysoft"]
+    
     attachment = []
 
-    cc = []
-    actor = get_actor_url(db_note.actor.name)
+    actor = get_actor_url(db_note.attributed.name)
     note_content = db_note.content
     source = db_note.source
 
@@ -366,11 +367,11 @@ async def group_following(request: Request, id: str, db: Session = Depends(get_d
     # ,"https://tooot.im/users/talash"
     # ,"https://tooot.im/users/LightBlueScreenOfWindowsUpdate"
     # "https://mastodon.gamedev.place/users/godotengine"],
-    "orderedItems": ["https://hayu.sh/users/guysoft"],
+    "orderedItems": [],
     "partOf": SERVER_URL + "/group/" + id + "/following",
-    "totalItems":4,"type":"OrderedCollectionPage"},
+    "totalItems":0,"type":"OrderedCollectionPage"},
     "id": SERVER_URL + "/group/" + id + "/following",
-    "totalItems":4,
+    "totalItems":0,
     "type":"OrderedCollection"}
 
     response = Response(content=json.dumps(return_value), media_type="application/activity+json")
