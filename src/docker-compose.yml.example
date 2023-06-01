@@ -2,7 +2,8 @@ version: '3'
 
 services:
   fedigroup:
-    build: .
+    # build: .
+    image: guysoft/fedigroup:main
     container_name: fedigroup
     tty: true
     restart: always
