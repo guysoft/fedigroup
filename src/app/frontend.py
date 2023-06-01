@@ -75,10 +75,20 @@ def switch_tab(msg: Dict) -> None:
 
 
 def avatar(src, style="", size=32):
+    if src == "default":
+        src = '/static/default_profile_icon.png'
     ui.image(src).style(f'border-radius: 50%; height: {size}px; width: {size}px;' + style)
 
 def div(ui):
     return ui.element('div')
+
+def title(content: str) -> ui.markdown:
+    return ui.markdown(content).classes('text-4xl sm:text-5xl md:text-6xl font-medium')
+
+
+def subtitle(content: str) -> ui.markdown:
+    return ui.markdown(content).classes('text-xl sm:text-2xl md:text-3xl leading-7')
+
 
 def resize_image_profile(data, width, height):
     image_file = io.BytesIO(data)
@@ -148,7 +158,7 @@ def post_card(ui, post_tree, color_theme):
         element.style(f'color: {icon_color};')
 
     with ui.element('div').style(f'background-color: {color_box}; border: 1px solid {color_border}; box-shadow: '
-                        f'none; color: {icon_color}; padding: 32px; border-radius: 8px;'):
+                        f'none; color: {icon_color}; padding: 16px; margin-bottom: 20px; border-radius: 8px;'):
         # profile avatar
         with ui.row().classes('flex items-center'):
             ui.image(profile_src).classes('rounded-full h-8 w-8')
@@ -179,26 +189,27 @@ def post_card(ui, post_tree, color_theme):
                 
 
         # divider
-        with ui.row().classes('w-full mt-8 mb-8'):
+        with ui.row().classes('w-full mt-4 mb-4'):
             div(ui).classes('w-full h-px').style(f'background-color: {color_border}')
 
             stack = []
-            with ui.expansion('Comments').classes('text-xs font-light') as expansion:
-                for comment in comments:
-                    stack.append((comment, 0, expansion))
-                while len(stack) >  0:
-                    node, level, expansion = stack.pop()
-                    with ui.row().classes('w-full'):
-                        with expansion:
-                            padding = level*10
+            if len(comments) > 0:
+                with ui.expansion('Comments', value=True).classes('text-xs font-light') as expansion:
+                    for comment in comments:
+                        stack.append((comment, 0, expansion))
+                    while len(stack) >  0:
+                        node, level, expansion = stack.pop()
+                        with ui.row().classes('w-full'):
+                            with expansion:
+                                padding = level*10
 
-                            with ui.row().classes('flex items-center').style(f'padding-left: {padding}px; padding-bottom: 3px;'): # f"border: 1px solid #4CAF50;"):
-                                avatar(node["data"]["profile_src"], "", 16)
-                                ui.label(node["data"]["profile_name"]).classes(f'{post_color}')
-                                ui.html(f'{node["data"]["post"]}')
-                            expansion_child = div(ui)#  ui.expansion('More').classes('text-xs font-light')
-                            for comment in node["comments"]:
-                                stack.append((comment, level + 1, expansion_child))
+                                with ui.row().classes('flex items-center').style(f'padding-left: {padding}px; padding-bottom: 3px;'): # f"border: 1px solid #4CAF50;"):
+                                    avatar(node["data"]["profile_src"], "", 16)
+                                    ui.label(node["data"]["profile_name"]).classes(f'{post_color}')
+                                    ui.html(f'{node["data"]["post"]}')
+                                expansion_child = div(ui)#  ui.expansion('More').classes('text-xs font-light')
+                                for comment in node["comments"]:
+                                    stack.append((comment, level + 1, expansion_child))
                     
 
         # # retweet
@@ -281,7 +292,7 @@ def init(app: FastAPI) -> None:
         with ui.left_drawer().classes('bg-blue-100') as left_drawer:
             # ui.label()
             
-            with ui.expansion().classes('text-xs font-light') as expansion:
+            with ui.expansion(value=True).classes('text-xs font-light') as expansion:
                 with expansion.add_slot('header'):
                     if await is_authenticated(ui):
                         username = await get_username(ui)
@@ -396,7 +407,7 @@ def init(app: FastAPI) -> None:
         if not await is_authenticated(ui):
             left_drawer.toggle()
 
-        with ui.tab_panels(tabs, value='Home'):
+        with ui.tab_panels(tabs, value='Home').classes("w-full"):
             if await is_authenticated(ui):
                 with ui.tab_panel("Home").style('border-radius: 50%; height: 800px; width: 640px;'):
                     for post_db in get_posts_for_member(db, await get_username(ui)):
@@ -410,15 +421,34 @@ def init(app: FastAPI) -> None:
                         comments_tree = get_comments_tree(post_db)
                         post_card(ui, comments_tree, COLOR_THEME_LIGHT)
             else:
+
+                def login_panel():
+                    ui.image('/static/default_group_icon.png').style('height: 150px; width: 150px; margin-bottom: 30px;')
+                    title('Fedigroup')
+
+                    subtitle('Groups in the fediverse').classes('max-w-[20rem] sm:max-w-[24rem] md:max-w-[30rem]')
+                    ui.link('Click to login', "/ui_login").style('color: #6E93D6; font-size: 200%; font-weight: 400')
+
+                    subtitle('What is Fedigroup?').classes('max-w-[20rem] sm:max-w-[24rem] md:max-w-[30rem]')
+                    ui.label('Fedigroup lets you create a group, follow it and mention it, what ever you mention would be boosted to the other followers.').classes('max-w-[20rem] sm:max-w-[24rem] md:max-w-[30rem] break-words')
+                    ui.label('The messages are saved and can be searched, the idea is to have a place for people to go and share common intrests.').classes('max-w-[20rem] sm:max-w-[24rem] md:max-w-[30rem]')
+                    
+                    subtitle('How do I create a group?').classes('max-w-[20rem] sm:max-w-[24rem] md:max-w-[30rem]')
+                    ui.label('You can login to create and manage using MastodonAPI-supported accounts (Mastodon, pleroma etc)').classes('max-w-[20rem] sm:max-w-[24rem] md:max-w-[30rem]')
+                    
+
                 with ui.tab_panel("Home").style('border-radius: 50%; height: 800px; width: 640px;'):
-                    ui.link('Click to login', "/ui_login").style('color: #6E93D6; font-size: 200%; font-weight: 300')
+                    login_panel()
 
                 with ui.tab_panel("All").style('border-radius: 50%; height: 800px; width: 640px;'):
-                    ui.link('Click to login', "/ui_login").style('color: #6E93D6; font-size: 200%; font-weight: 300')
+                    login_panel()
 
                 
             with ui.tab_panel('About'):
-                ui.label('This is the second tab')
+                ui.image('/static/default_group_icon.png').style('height: 150px; width: 150px; margin-bottom: 30px;')
+                ui.label('Fedigroup is free software')
+                ui.label('You are free to use, share and modify it under AGPL+ license')
+                ui.markdown('For more information visit the [GitHub project page](https://github.com/guysoft/fedigroup)')
 
 
     @ui.page('/oauth_login_code_frontend')
@@ -485,9 +515,11 @@ def init(app: FastAPI) -> None:
 
         # request.session['id'] = str(uuid.uuid4())  # NOTE this stores a new session ID in the cookie of the client
         with ui.card().classes('absolute-center'):
-            username = ui.input('Username').on('keydown.enter', try_login)
+            subtitle("Enter your fediverse username")
+            username = ui.input('Username', placeholder='username@server.social').on('keydown.enter', try_login)
             ui.button('Log in', on_click=try_login)
             ui.label(ui.open('/protected'))
+            ui.link("Back to homepage", "/")
 
 
     @ui.page('/ui_logout')
