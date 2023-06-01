@@ -193,6 +193,10 @@ def get_actor_or_create(db: Session, actor_handle: str) -> Actor:
     if actor is None:
         profile = get_profile(get_actor_url(actor_handle))
         profile_picture = profile.get("icon", {}).get("url", None)
+
+        if profile_picture is None:
+            profile_picture = "default"
+
         actor_entry = {
             "name": actor_handle,
             "profile_picture": profile_picture,
@@ -386,7 +390,7 @@ def add_initial_oauth_code(db: Session, scopes: List[str], user: str, oauth_app:
 
     actor_handle = f"{user}@{oauth_app.domain}"
     actor = get_actor_or_create(db, actor_handle)
-    oauth_code = db.exec(select(OauthCode).where(OauthCode.actor_id == actor.id).where(OauthApp.scopes == scopes)).first()
+    oauth_code = db.exec(select(OauthCode).join(OauthApp).where(OauthCode.actor_id == actor.id).where(OauthApp.scopes == scopes)).first()
 
     if oauth_code is None:
         item = {
