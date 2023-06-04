@@ -2,7 +2,6 @@ from fastapi import FastAPI, Request, Header, Response, Form, Depends, Backgroun
 from app.db import get_db
 from sqlmodel import Session
 from app.crud import update_oauth_code, get_posts_for_member, get_posts_public, get_actor_or_create
-from app.mastodonapi import confirm_actor_valid
 import asyncio
 from app.common import get_config, is_valid_group_name
 from nicegui import Client, ui
