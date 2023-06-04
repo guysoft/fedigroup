@@ -23,25 +23,19 @@ def register_oauth_application(domain, scopes=("read",)):
     client_id, client_secret = Mastodon.create_app(app_id,
         api_base_url=url,
         scopes=scopes,
-        redirect_uris=[REDIERCT_URI_BACKEND, REDIERCT_URI_FRONTEND]
+        redirect_uris=["urn:ietf:wg:oauth:2.0:oob", REDIERCT_URI_BACKEND, REDIERCT_URI_FRONTEND]
     )
     return client_id, client_secret
 
 def get_oauth_url(client_id, client_secret, domain, state, scopes, redirect_url):
     url = d2url(domain)
-    mastodon = Mastodon(client_id=client_secret, client_secret=client_secret, api_base_url=url)
+    mastodon = Mastodon(client_id=client_id, client_secret=client_secret, api_base_url=url)
     url = mastodon.auth_request_url(client_id=client_id, state=state, scopes=scopes, force_login=True, redirect_uris=redirect_url)
     return url
 
 def get_mastodon_login(domain, client_id, token):
     url = d2url(domain)
     # To debug add below debug_requests=True
-    mastodon = Mastodon(client_id=client_id, api_base_url=url)
+    mastodon = Mastodon(client_id=client_secret, api_base_url=url)
     client = mastodon.log_in(code=token, scopes=scopes)
     return client
-    
-def confirm_actor_valid(domain, client_id, client_secret, scopes, token, actor_handle):
-    url = d2url(domain)
-    mastodon = Mastodon(client_id=client_id, client_secret=client_secret, api_base_url=url)
-    client = mastodon.log_in(code=token, scopes=scopes)
-    return True
