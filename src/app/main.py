@@ -111,6 +111,11 @@ async def create_group_post(request: Request, group_name: str, display_name: str
     item["cover_photo"] = cover_photo
     item["creator_id"] = actor.id
     item["discoverable"] = True
+
+    if item["profile_picture"] is None:
+        item["profile_picture"] = "default"
+    if item["cover_photo"] is None:
+        item["cover_photo"] = "default"
     
     db_group = get_group_by_name(db, name=group_name)
     if db_group is not None:
