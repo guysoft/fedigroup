@@ -8,6 +8,7 @@ def webfinger(actor_handle):
         actor_handle = actor_handle[1:]
 
     if "@" not in actor_handle:
+        print("actor handle has no @")
         return
     
     host = actor_handle.split("@")[1]
@@ -21,7 +22,7 @@ def webfinger(actor_handle):
     print("Getting: " + str(url))
 
     r = requests.get(url)
-    data = None
+    data = []
     try:
         data = r.json()
     except requests.JSONDecodeError:
@@ -87,10 +88,10 @@ def actor_to_address_format(actor_url):
 
     data = get_profile(actor_url)
 
-    if "name" not in data.keys():
+    if "preferredUsername" not in data.keys():
         return
     
-    return data["name"] + "@" + host
+    return data["preferredUsername"] + "@" + host
 
 def get_federated_note(node_id):
     return get_profile(node_id)
