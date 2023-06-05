@@ -278,7 +278,8 @@ def init(app: FastAPI) -> None:
         await asyncio.sleep(2)
         
         with ui.header().classes(replace='row items-center') as header:
-            ui.button(on_click=lambda: left_drawer.toggle()).props('flat color=white icon=menu')
+            if await is_authenticated(ui):
+                ui.button(on_click=lambda: left_drawer.toggle()).props('flat color=white icon=menu')
             with ui.tabs() as tabs:
                 ui.tab('Home', icon='home')
                 ui.tab('All', icon='public')
@@ -287,124 +288,119 @@ def init(app: FastAPI) -> None:
 
         # with ui.footer(value=False) as footer:
         #     ui.label('Footer')
+        if await is_authenticated(ui):
+            with ui.left_drawer().classes('bg-blue-100') as left_drawer:
+                # ui.label()
+                with ui.expansion(value=True).classes('text-xs font-light') as expansion:
+                    with expansion.add_slot('header'):
+                        if await is_authenticated(ui):
+                            username = await get_username(ui)
+                            avatar_url = get_avatar(db, username)
+                            avatar(avatar_url, "", 16)
+                            ui.label(f'{username}').style("padding-left: 5px")
 
-        with ui.left_drawer().classes('bg-blue-100') as left_drawer:
-            # ui.label()
-            
-            with ui.expansion(value=True).classes('text-xs font-light') as expansion:
-                with expansion.add_slot('header'):
-                    if await is_authenticated(ui):
-                        username = await get_username(ui)
-                        avatar_url = get_avatar(db, username)
-                        avatar(avatar_url, "", 16)
-                        ui.label(f'{username}').style("padding-left: 5px")
+                    async def submit_new_group():
+                        request_data = {
+                            "group_name": group_name.value,
+                            "display_name": display_name.value,
+                            "description": description.value,
+                            "profile_picture": profile_picture.save_url,
+                            "cover_photo": cover_photo.save_url,
+                            "creator_handle": username,
+                        }
+                        payload = json.dumps(request_data)
 
-                async def submit_new_group():
-                    request_data = {
-                        "group_name": group_name.value,
-                        "display_name": display_name.value,
-                        "description": description.value,
-                        "profile_picture": profile_picture.save_url,
-                        "cover_photo": cover_photo.save_url,
-                        "creator_handle": username,
-                    }
-                    payload = json.dumps(request_data)
+                        response = await ui.run_javascript(
+                        f"""
+                        var data = JSON.parse('{payload}');
+                        var xmlhttp = new XMLHttpRequest();
 
-                    response = await ui.run_javascript(
-                    f"""
-                    var data = JSON.parse('{payload}');
-                    var xmlhttp = new XMLHttpRequest();
-
-                    var params = new URLSearchParams();
-                    for (var key in data) {{
-                        if (data.hasOwnProperty(key)) {{
-                        params.append(key, data[key]);
+                        var params = new URLSearchParams();
+                        for (var key in data) {{
+                            if (data.hasOwnProperty(key)) {{
+                            params.append(key, data[key]);
+                            }}
                         }}
-                    }}
-                    xmlhttp.open("POST", "/create_group_post?" + params.toString(), false);
-                    xmlhttp.send();
-                    var return_value = xmlhttp.responseText;
-                    try {{
-                        return_value = JSON.parse(xmlhttp.responseText);
-                    }} catch (e) {{
-                        return_value = xmlhttp.responseText;
-                    }}
-                    (xmlhttp.responseText)
-                    """,
-                        respond=True,
-                    )
-                    try:
-                        response = json.loads(response)
-                    except JSONDecodeError:
-                        pass
-                    if type(response) == dict:
-                        if response["success"]:
-                            print(f"group created: {group_name.value}")
-                            await ui.run_javascript(f'window.location.replace("/group/{group_name.value}");',respond=False)
-                            ui.notify(f'Group created, redirecting to group page')
-                        else:
-                            # Handle group creation error
-                            if "message" in response.keys():
-                                ui.notify(f'Group not created: {response["message"]}')
+                        xmlhttp.open("POST", "/create_group_post?" + params.toString(), false);
+                        xmlhttp.send();
+                        var return_value = xmlhttp.responseText;
+                        try {{
+                            return_value = JSON.parse(xmlhttp.responseText);
+                        }} catch (e) {{
+                            return_value = xmlhttp.responseText;
+                        }}
+                        (xmlhttp.responseText)
+                        """,
+                            respond=True,
+                        )
+                        try:
+                            response = json.loads(response)
+                        except JSONDecodeError:
+                            pass
+                        if type(response) == dict:
+                            if response["success"]:
+                                print(f"group created: {group_name.value}")
+                                await ui.run_javascript(f'window.location.replace("/group/{group_name.value}");',respond=False)
+                                ui.notify(f'Group created, redirecting to group page')
                             else:
-                                ui.notify(f'Group not created: {response}')
-                    else:
-                        ui.notify(f'Response not readable data: {response}')
+                                # Handle group creation error
+                                if "message" in response.keys():
+                                    ui.notify(f'Group not created: {response["message"]}')
+                                else:
+                                    ui.notify(f'Group not created: {response}')
+                        else:
+                            ui.notify(f'Response not readable data: {response}')
 
+
+                    with ui.column():
+                        with ui.row():
+                            ui.icon('logout')
+                            ui.link('Logout', "/ui_logout")
+
+                        with ui.dialog().props('persistent fullWidth fullHeight') as dialog, ui.card():
+                            with ui.element('q-toolbar-title'):
+                                with ui.row():
+                                    ui.icon('group_add')
+                                    ui.label('Create New Group')
+                                    ui.icon('close').props("v-close-popup").classes("on-right flat round dense cursor-pointer absolute-right").on("click", dialog.close)
+
+                            with ui.column().classes('items-center'):
+                                group_name = ui.input(label="Group name", placeholder='cats',
+                                validation={
+                                    'Input too short': lambda value: len(value) > 1,
+                                    "only use alphanumeric letters (letters, numbers, underscores, hyphens)": is_valid_group_name
+                                    }
+                                )
+                                display_name = ui.input(label="Display name", placeholder='The cute cat group',
+                                validation={'Input too short': lambda value: len(value) > 1}
+                                )
+                                description = ui.textarea(label="Description", placeholder='This group is a place to exchange picture of cats',
+                                validation={'Input too short': lambda value: len(value) > 1}
+                                )
+
+                                def handle_upload_profile(event, element, width=400, height=400):
+                                    with event.content as f:
+                                        data = f.read() # read entire file as bytes
+                                        save_url = resize_image_profile(data, width, height)
+                                        
+                                        element.save_url = save_url
+                                        ui.notify(f'Uploaded {element.save_url}')
+
+
+
+                                profile_picture = ui.upload(auto_upload=True, on_upload=lambda e:  handle_upload_profile(e, profile_picture), label="Profile picture", max_files=1).props('accept=".jpg, image/*"')
+                                profile_picture.save_url = None
+                                cover_photo = ui.upload(auto_upload=True, on_upload=lambda e: handle_upload_profile(e, cover_photo, 1920, 1080), label="Cover picture", max_files=1)
+                                cover_photo.save_url = None
+                                ui.button('Create', on_click=submit_new_group)
+
+                                # with ui.row():
+                                #     ui.button('Close', on_click=dialog.close)
+                                #     ui.button('Create', on_click=submit_new_group)
+                        with ui.row():
+                            ui.icon('group_add')
+                            ui.link("Create new group").on("click", dialog.open)
                 
-                with ui.column():
-                    with ui.row():
-                        ui.icon('logout')
-                        ui.link('Logout', "/ui_logout")
-
-                    with ui.dialog().props('persistent fullWidth fullHeight') as dialog, ui.card():
-                        with ui.element('q-toolbar-title'):
-                            with ui.row():
-                                ui.icon('group_add')
-                                ui.label('Create New Group')
-                                ui.icon('close').props("v-close-popup").classes("on-right flat round dense cursor-pointer absolute-right").on("click", dialog.close)
-
-                        with ui.column().classes('items-center'):
-                            group_name = ui.input(label="Group name", placeholder='cats',
-                            validation={
-                                'Input too short': lambda value: len(value) > 1,
-                                "only use alphanumeric letters (letters, numbers, underscores, hyphens)": is_valid_group_name
-                                }
-                            )
-                            display_name = ui.input(label="Display name", placeholder='The cute cat group',
-                            validation={'Input too short': lambda value: len(value) > 1}
-                            )
-                            description = ui.textarea(label="Description", placeholder='This group is a place to exchange picture of cats',
-                            validation={'Input too short': lambda value: len(value) > 1}
-                            )
-
-                            def handle_upload_profile(event, element, width=400, height=400):
-                                with event.content as f:
-                                    data = f.read() # read entire file as bytes
-                                    save_url = resize_image_profile(data, width, height)
-                                    
-                                    element.save_url = save_url
-                                    ui.notify(f'Uploaded {element.save_url}')
-
-
-
-                            profile_picture = ui.upload(auto_upload=True, on_upload=lambda e:  handle_upload_profile(e, profile_picture), label="Profile picture", max_files=1).props('accept=".jpg, image/*"')
-                            profile_picture.save_url = None
-                            cover_photo = ui.upload(auto_upload=True, on_upload=lambda e: handle_upload_profile(e, cover_photo, 1920, 1080), label="Cover picture", max_files=1)
-                            cover_photo.save_url = None
-                            ui.button('Create', on_click=submit_new_group)
-
-                            # with ui.row():
-                            #     ui.button('Close', on_click=dialog.close)
-                            #     ui.button('Create', on_click=submit_new_group)
-                    with ui.row():
-                        ui.icon('group_add')
-                        ui.link("Create new group").on("click", dialog.open)
-                
-            
-        # start closed if logged out
-        if not await is_authenticated(ui):
-            left_drawer.toggle()
 
         with ui.tab_panels(tabs, value='Home').classes("w-full"):
             if await is_authenticated(ui):
