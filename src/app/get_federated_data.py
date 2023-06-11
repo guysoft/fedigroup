@@ -59,7 +59,7 @@ def get_actor_inbox(actor_url, shared=False):
 def get_profile(actor_url):
     # TODO: make this s generic function that get_profile and get_federated_note use
     headers = {
-        'Accept': 'application/json',
+        'Accept': 'application/activity+json',
     }
     r = requests.get(actor_url, headers=headers)
     data = None
