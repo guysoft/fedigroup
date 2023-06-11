@@ -119,7 +119,7 @@ async def create_group_post(request: Request, group_name: str, display_name: str
     
     db_group = get_group_by_name(db, name=group_name)
     if db_group is not None:
-        return {"message": f"Error: group {name} already exists", "success": False}
+        return {"message": f"Error: group {group_name} already exists", "success": False}
     
     try:
         new_group_db = create_group(db=db, item=item)
