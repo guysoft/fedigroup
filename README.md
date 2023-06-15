@@ -11,7 +11,7 @@ The server is currently in alpha stage and many critical features don't work yet
 ### Features
 
 * You can login using a Mastodon-API supported account and create a group
-* You can follow that group and it will boost mentions of it to other people.egigro
+* You can follow that group and it will boost mentions of it to other people.
 * The group stores the message in the database
 
 ### What does not work yet
