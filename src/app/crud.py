@@ -275,7 +275,7 @@ def remove_member_grom_group(db: Session, item: MemberCreateRemove) -> Optional[
 
 
 def get_members_list(db: Session, group: str) -> Optional[Members]:
-    return db.exec(select(Members).where(Group.name == group))
+    return db.exec(select(Members).join(Group).where(Group.name == group))
 
 
 def get_note(db: Session, note_id: str) -> Optional[Note]:
