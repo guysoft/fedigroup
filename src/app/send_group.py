@@ -3,7 +3,17 @@ from typing import Any, Dict, List
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from urllib.parse import urljoin
-from app.crud import create_internal_note, get_handle_from_url_or_create, create_activity_to_send_from_note, create_activity_to_send_from_boost, get_members_list, get_group_by_name, get_actor_or_create, create_boost, create_federated_note, member_in_group
+from app.crud import (
+    create_internal_note,
+    get_handle_from_url_or_create,
+    create_activity_to_send_from_note,
+    create_activity_to_send_from_boost,
+    get_members_list, get_group_by_name,
+    get_actor_or_create, create_boost,
+    create_federated_note,
+    member_in_group,
+    get_boost_by_note_id
+)
 from app.common import SERVER_DOMAIN, SERVER_URL, multi_urljoin, is_local_actor, get_handle_name, get_server_keys
 from app.send_federated_data import send_signed
 from app.get_federated_data import actor_to_address_format, get_actor_inbox, get_actor_url
@@ -70,8 +80,13 @@ def save_message_and_boost(db: Session, item: Dict[str, Any], groups: List[str])
         print(f"boosting test group: {group}")
         actor = group + "@" + SERVER_DOMAIN
         group_db = get_group_by_name(db, group)
-        
-        if member_in_group(db, group, author_of_note):
+        in_reply_to = item.get("inReplyTo", None)
+        replied_to_existing_topic = in_reply_to is not None and get_boost_by_note_id(db, in_reply_to) is not None
+        is_member_in_group = member_in_group(db, group, author_of_note)
+
+        if is_member_in_group or replied_to_existing_topic:
+            if replied_to_existing_topic and not is_member_in_group:
+                print("Replied to existing topic, posting for non-member")
             now_datetime = datetime.now(timezone.utc)
             boost_data_dict = {
                 "group": group_db,
