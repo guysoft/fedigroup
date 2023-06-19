@@ -404,13 +404,13 @@ def init(app: FastAPI) -> None:
 
         with ui.tab_panels(tabs, value='Home').classes("w-full"):
             if await is_authenticated(ui):
-                with ui.tab_panel("Home").style('border-radius: 50%; height: 800px; width: 640px;'):
+                with ui.tab_panel("Home").style('border-radius: 50%; height: 800px; width: 100%; max-width: 640px;'):
                     for post_db in get_posts_for_member(db, await get_username(ui)):
                         comments = []
                         comments_tree = get_comments_tree(post_db)
                         post_card(ui, comments_tree, COLOR_THEME_LIGHT)
 
-                with ui.tab_panel("All").style('border-radius: 50%; height: 800px; width: 640px;'):
+                with ui.tab_panel("All").style('border-radius: 50%; height: 800px; width: 100%; max-width: 640px;'):
                     for post_db in get_posts_public(db, await get_username(ui)):
                         comments = []
                         comments_tree = get_comments_tree(post_db)
@@ -439,7 +439,7 @@ def init(app: FastAPI) -> None:
                     login_panel()
 
                 
-            with ui.tab_panel('About'):
+            with ui.tab_panel('About').style('border-radius: 50%; height: 800px; width: 100%; max-width: 640px;'):
                 ui.image('/static/default_group_icon.png').style('height: 150px; width: 150px; margin-bottom: 30px;')
                 ui.label('Fedigroup is free software')
                 ui.label('You are free to use, share and modify it under AGPL+ license')
