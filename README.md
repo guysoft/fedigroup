@@ -3,7 +3,7 @@
 
 Groups in the Fediverse
 
-Fegigroup lets you create a group and then mention it in the fediverse, the group would then boost your message and also store its contents for search.
+Fedigroup lets you create a group and then mention it in the fediverse, the group would then boost your message and also store its contents for search.
 There is also a web UI that lets you search within groups you are a member of (search is currently being implemented).
 
 The server is currently in alpha stage and many critical features don't work yet. Contributions are welcome!

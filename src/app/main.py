@@ -164,7 +164,7 @@ def get_context():
 
 
 
-# Example response: curl https://hayu.sh/users/guysoft  -H "Accept: application/json"
+# Example response: curl https://hayu.sh/users/guysoft  -H "Accept: application/activity+json"
 @app.get("/group/{id}")
 async def group_page(request: Request, id: str, db: Session = Depends(get_db)):
     db_group = get_group_by_name(db, name=id)
@@ -322,7 +322,7 @@ def handle_activity_html_response(request: Request, return_value, data: str):
     return response
 
 
-# Example response: curl https://kitch.win/users/guysoft/followers  -H "Accept: application/json"
+# Example response: curl https://kitch.win/users/guysoft/followers  -H "Accept: application/activity+json"
 @app.get("/group/{id}/followers")
 def group_members(request: Request, id: str, db: Session = Depends(get_db)):
     db_group = get_group_by_name(db, name=id)
@@ -355,7 +355,7 @@ def group_members(request: Request, id: str, db: Session = Depends(get_db)):
     response = Response(content=json.dumps(return_value), media_type="application/activity+json")
     return response
 
-# Example response: curl https://hayu.sh/users/guysoft/following  -H "Accept: application/json"
+# Example response: curl https://hayu.sh/users/guysoft/following  -H "Accept: application/activity+json"
 @app.get("/group/{id}/following")
 async def group_following(request: Request, id: str, db: Session = Depends(get_db)):
     db_group = get_group_by_name(db, name=id)
