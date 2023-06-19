@@ -60,6 +60,7 @@ def get_comments_tree(comments) -> Dict[str, Any]:
         comment_dict["data"] = {
             "profile_src": node.original_poster.profile_picture,
             "id": node.note_id,
+            "note_id": node.note_id,
             "profile_name": node.original_poster.name,
 
             "group_src": node.attributed.profile_picture,
@@ -152,6 +153,7 @@ def post_card(ui, post_tree, time_zone, color_theme):
     profile_src = post_dict["profile_src"]
     profile_name = post_dict["profile_name"]
     created_at = post_dict["created_at"]
+    note_id = post_dict["note_id"]
     post = post_dict["post"]
     post_id = post_dict["id"]
     comments = post_tree["comments"]
@@ -193,7 +195,7 @@ def post_card(ui, post_tree, time_zone, color_theme):
 
         # date, share, like
         with ui.row().classes('flex justify-between items-center w-full mt-4'):
-            ui.label(format_time(created_at, time_zone)).classes('text-xs font-light').style(f'color: {time_text};')
+            ui.link(format_time(created_at, time_zone), note_id).classes('text-xs font-light').style(f'color: {time_text}; text-decoration: none;')
 
             def like_post(post_id):
                 print(post_id)
