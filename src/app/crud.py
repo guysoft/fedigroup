@@ -239,7 +239,7 @@ def add_member_to_group(db: Session, item: MemberCreateRemove) -> Optional[Membe
 
 def member_in_group(db: Session, group_name: str, actor: Actor) -> bool:
     # Check if exists:
-    member_in_group = db.exec(select(Members, Group).where(
+    member_in_group = db.exec(select(Members).join(Group).where(
         Group.name == group_name).where(Members.member_id == actor.id)).first()
 
     return member_in_group is not None
@@ -436,7 +436,7 @@ def get_settings_secret(db):
 
 def get_groups_of_member(db, actor) -> List[Group]:
     actor = get_actor_or_create(db, actor_handle)
-    groups_of_actor = db.exec(select(Members, Group).where(Members.member_id == actor.id))
+    groups_of_actor = db.exec(select(Members).join(Group).where(Members.member_id == actor.id))
     return [member["Group"] for member in groups_of_actor]
 
 def get_posts_for_member(db, actor_handle) -> List[Boost]:
