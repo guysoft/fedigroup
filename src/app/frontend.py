@@ -198,10 +198,13 @@ def post_card(ui, post_tree, time_zone, color_theme):
             ui.link(format_time(created_at, time_zone), note_id).classes('text-xs font-light').style(f'color: {time_text}; text-decoration: none;')
 
             def like_post(post_id):
-                print(post_id)
+                ui.notify("Like unimplemented")
+
+            def share_post(post_id):
+                ui.notify("Share unimplemented")
                 
             with div(ui):
-                share = ui.icon('share').classes('mr-4 text-sm').on("mouseover", lambda:  set_hightlight(share)).on("mouseout", lambda: set_back(share))
+                share = ui.icon('share').classes('mr-4 text-sm').on("mouseover", lambda:  set_hightlight(share)).on("mouseout", lambda: set_back(share)).on("click", lambda: share_post(post_id))
                 tumbs_up = ui.icon('thumb_up').classes('text-sm').on("mouseover", lambda:  set_hightlight(tumbs_up)).on("mouseout", lambda: set_back(tumbs_up)).on("click", lambda: like_post(post_id))
                 
 
