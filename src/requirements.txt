@@ -19,3 +19,4 @@ typer[all]
 mastodon.py
 nicegui
 Pillow
+pytz

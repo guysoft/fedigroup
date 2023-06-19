@@ -7,6 +7,7 @@ from app.common import get_config, is_valid_group_name
 from nicegui import Client, ui
 from typing import Dict, Any
 from PIL import Image
+import pytz
 import hashlib
 import io
 import os
@@ -26,6 +27,20 @@ COLOR_THEME_LIGHT = {
     "color_border": "black",
     "color_box": "white"
 }
+
+def create_timezone_from_minutes(time_min):
+    # Convert minutes to hours and minutes
+    hours, minutes = divmod(time_min, 60)
+    # Determine the timezone offset in hours and minutes
+    if time_min >= 0:
+        tz_offset = pytz.FixedOffset(hours * 60 + minutes)
+    else:
+        tz_offset = pytz.FixedOffset(-1 * (hours * 60 + minutes))
+    return tz_offset
+
+def format_time(date_time, time_zone):
+    time_zone_format = create_timezone_from_minutes(time_zone)
+    return date_time.astimezone(time_zone_format).strftime("%m/%d/%Y, %H:%M:%S")
 
 def get_comments_tree(comments) -> Dict[str, Any]:
     """Build a dict tree of a post and its comments
@@ -51,7 +66,7 @@ def get_comments_tree(comments) -> Dict[str, Any]:
             "group_name": node.group.name,
 
             "post": node.content,
-            "created_at": node.original_time.strftime("%m/%d/%Y, %H:%M:%S"),
+            "created_at": node.original_time,
         }
         comment_dict["comments"] = []
 
@@ -132,7 +147,7 @@ def resize_image_profile(data, width, height):
         return save_url
 
 
-def post_card(ui, post_tree, color_theme):
+def post_card(ui, post_tree, time_zone, color_theme):
     post_dict = post_tree["data"]
     profile_src = post_dict["profile_src"]
     profile_name = post_dict["profile_name"]
@@ -175,9 +190,10 @@ def post_card(ui, post_tree, color_theme):
         with ui.row().classes('mt-4'):
             ui.html(post).classes('text-base font-light').style(f'color: {post_color};')
 
+
         # date, share, like
         with ui.row().classes('flex justify-between items-center w-full mt-4'):
-            ui.label(created_at).classes('text-xs font-light').style(f'color: {time_text};')
+            ui.label(format_time(created_at, time_zone)).classes('text-xs font-light').style(f'color: {time_text};')
 
             def like_post(post_id):
                 print(post_id)
@@ -239,6 +255,19 @@ async def get_username(ui):
         )
     return username_data.get("username")
 
+async def get_time_zone(ui):
+    """
+    Returns the offset in mintues
+
+    eg UTC+3 will return -180
+    """
+    time_zone = await ui.run_javascript(
+        f"""
+        (new Date()).getTimezoneOffset();
+        """
+        )
+    return time_zone
+
 async def send_logout(ui):
     logout_data = await ui.run_javascript(
         f"""
@@ -276,6 +305,8 @@ def init(app: FastAPI) -> None:
             await asyncio.sleep(1)
             await client.connected()
         await asyncio.sleep(2)
+
+        time_zone = await get_time_zone(ui)
         
         with ui.header().classes(replace='row items-center') as header:
             if await is_authenticated(ui):
@@ -409,13 +440,13 @@ def init(app: FastAPI) -> None:
                     for post_db in get_posts_for_member(db, await get_username(ui)):
                         comments = []
                         comments_tree = get_comments_tree(post_db)
-                        post_card(ui, comments_tree, COLOR_THEME_LIGHT)
+                        post_card(ui, comments_tree, time_zone, COLOR_THEME_LIGHT)
 
                 with ui.tab_panel("All").style('border-radius: 50%; height: 800px; width: 100%; max-width: 640px;'):
                     for post_db in get_posts_public(db, await get_username(ui)):
                         comments = []
                         comments_tree = get_comments_tree(post_db)
-                        post_card(ui, comments_tree, COLOR_THEME_LIGHT)
+                        post_card(ui, comments_tree, time_zone, COLOR_THEME_LIGHT)
             else:
 
                 def login_panel():
