@@ -358,39 +358,40 @@ def init(app: FastAPI) -> None:
                             ui.link('Logout', "/ui_logout")
 
                         with ui.dialog().props('persistent fullWidth fullHeight') as dialog, ui.card():
-                            with ui.element('q-toolbar-title'):
-                                with ui.row():
-                                    ui.icon('group_add')
-                                    ui.label('Create New Group')
-                                    ui.icon('close').props("v-close-popup").classes("on-right flat round dense cursor-pointer absolute-right").on("click", dialog.close)
+                            with ui.column().classes('items-center').style("width: 100%"):
+                                with ui.element('q-toolbar-title'):
+                                    with ui.row():
+                                        ui.icon('group_add')
+                                        ui.label('Create New Group')
+                                        ui.icon('close').props("v-close-popup").classes("on-right flat round dense cursor-pointer absolute-right").on("click", dialog.close)
 
-                            with ui.column().classes('items-center'):
-                                group_name = ui.input(label="Group name", placeholder='cats',
-                                validation={
-                                    'Input too short': lambda value: len(value) > 1,
-                                    "only use alphanumeric letters (letters, numbers, underscores, hyphens)": is_valid_group_name
-                                    }
-                                )
-                                display_name = ui.input(label="Display name", placeholder='The cute cat group',
-                                validation={'Input too short': lambda value: len(value) > 1}
-                                )
-                                description = ui.textarea(label="Description", placeholder='This group is a place to exchange picture of cats',
-                                validation={'Input too short': lambda value: len(value) > 1}
-                                )
+                                with ui.column().classes('items-center'):
+                                    group_name = ui.input(label="Group name", placeholder='cats',
+                                    validation={
+                                        'Input too short': lambda value: len(value) > 1,
+                                        "only use alphanumeric letters (letters, numbers, underscores, hyphens)": is_valid_group_name
+                                        }
+                                    )
+                                    display_name = ui.input(label="Display name", placeholder='The cute cat group',
+                                    validation={'Input too short': lambda value: len(value) > 1}
+                                    )
+                                    description = ui.textarea(label="Description", placeholder='This group is a place to exchange picture of cats',
+                                    validation={'Input too short': lambda value: len(value) > 1}
+                                    )
 
-                                def handle_upload_profile(event, element, width=400, height=400):
-                                    with event.content as f:
-                                        data = f.read() # read entire file as bytes
-                                        save_url = resize_image_profile(data, width, height)
-                                        
-                                        element.save_url = save_url
-                                        ui.notify(f'Uploaded {element.save_url}')
+                                    def handle_upload_profile(event, element, width=400, height=400):
+                                        with event.content as f:
+                                            data = f.read() # read entire file as bytes
+                                            save_url = resize_image_profile(data, width, height)
+                                            
+                                            element.save_url = save_url
+                                            ui.notify(f'Uploaded {element.save_url}')
 
 
 
-                                profile_picture = ui.upload(auto_upload=True, on_upload=lambda e:  handle_upload_profile(e, profile_picture), label="Profile picture", max_files=1).props('accept=".jpg, image/*"')
+                                profile_picture = ui.upload(auto_upload=True, on_upload=lambda e:  handle_upload_profile(e, profile_picture), label="Profile picture", max_files=1).props('accept=".jpg, image/*"').style("width: 70%; max-width: 640px")
                                 profile_picture.save_url = None
-                                cover_photo = ui.upload(auto_upload=True, on_upload=lambda e: handle_upload_profile(e, cover_photo, 1920, 1080), label="Cover picture", max_files=1)
+                                cover_photo = ui.upload(auto_upload=True, on_upload=lambda e: handle_upload_profile(e, cover_photo, 1920, 1080), label="Cover picture", max_files=1).props('accept=".jpg, image/*"').style("width: 70%; max-width: 640px")
                                 cover_photo.save_url = None
                                 ui.button('Create', on_click=submit_new_group)
 
