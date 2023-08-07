@@ -125,9 +125,12 @@ def send_message(db, activity, preshared_key_id, key_path, recipients):
                 members = db_group.members
             
                 for member in members:
-                    actor_inbox = get_actor_inbox(get_actor_url(member.member.name), shared=True)
-                    if actor_inbox not in inboxes:
-                        inboxes.append(actor_inbox)
+                    try:
+                        actor_inbox = get_actor_inbox(get_actor_url(member.member.name), shared=True)
+                        if actor_inbox not in inboxes:
+                            inboxes.append(actor_inbox)
+                    except AttributeError:
+                        print(f"ERROR: could not message to member: {member.member.name}")
 
     send_signed_multi(activity, inboxes, preshared_key_id, key_path)
 
